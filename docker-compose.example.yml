@@ -1,0 +1,38 @@
+services:
+  openpostings-ui:
+    image: local/open-postings:latest
+    container_name: open-postings
+    restart: unless-stopped
+    ports:
+      - "3001:8081"
+    command: ["npx", "expo", "start", "--web", "--port", "8081", "--non-interactive"]
+    environment:
+      - PORT=8081
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8081/', (r) => { if (r.statusCode !== 200) process.exit(1); })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - openpostings-api
+
+  openpostings-api:
+    image: local/open-postings:latest
+    container_name: open-postings-api
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    command: ["npm", "run", "server"]
+    environment:
+      - PORT=8787
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      - ./data/jobs.db:/app/jobs.db
