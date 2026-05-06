@@ -297,6 +297,90 @@ NOTE: Or if you are using the Windows MSI installer version, just have your back
 - `Dynamic ATS URLs are not supported`:
   - Expected behavior. This extension only inserts seeded ATS company sources.
 
+=======
+## Docker (Self-Hosted / Reverse Proxy)
+
+If you want to run OpenPostings on a server or homelab rather than your local
+machine, Docker is the way to go. The setup splits into two containers — one
+for the Expo web frontend and one for the Express API — both built from the
+same image.
+
+### Before You Build — Two Things to Know
+
+**1. You need Debian Trixie as the base image.**
+
+The `sqlite3` native addon requires glibc 2.38+. The standard Node.js Docker
+images use Debian Bookworm which only ships glibc 2.36, and you'll hit this
+at runtime:
+
+```
+Error: GLIBC_2.38 not found (ERR_DLOPEN_FAILED)
+```
+
+The provided `Dockerfile` uses `node:20-trixie-slim` which has glibc 2.38 and
+just works.
+
+**2. The API URL gets baked in at build time, not runtime.**
+
+Expo's Metro bundler compiles `EXPO_PUBLIC_API_BASE_URL` into the JS bundle
+when the image is built — not when the container starts. Passing it as a
+Docker env var alone won't do anything. It needs to be in `/app/.env` before
+the bundle compiles.
+
+For local use the default `http://localhost:8787` works fine. If you're
+running behind a reverse proxy (Nginx, NPM, Caddy, Cloudflare Tunnel, etc.)
+you need to pass your public API URL at build time:
+
+```bash
+bash docker-build.sh https://your-api.example.com
+```
+
+One more thing — the variable name in `src/api.js` is `EXPO_PUBLIC_API_BASE_URL`.
+Note the `_BASE` suffix. Using `EXPO_PUBLIC_API_URL` without it won't work.
+
+### Quick Start
+
+```bash
+# Local deployment (API and UI on the same machine)
+bash docker-build.sh
+
+# Behind a reverse proxy
+bash docker-build.sh https://your-api.example.com
+
+# Create the data directory and DB file before starting
+mkdir -p ./data && touch ./data/jobs.db
+
+# Start both containers
+docker compose -f docker-compose.example.yml up -d
+```
+
+Then open `http://localhost:3001` and hit **Sync Postings**. The first sync
+crawls all ATS sources and takes a while — it runs server-side so you can
+close the browser tab and come back later.
+
+### Reverse Proxy Setup
+
+You'll need two upstream entries pointing at the same host:
+
+| Host | Upstream | Purpose |
+|---|---|---|
+| `postings.example.com` | `http://localhost:3001` | Frontend UI |
+| `postings-api.example.com` | `http://localhost:8787` | API |
+
+### Keeping Your Data
+
+Job data is stored in `jobs.db` inside the `openpostings-api` container at
+`/app/jobs.db`. The example compose file bind-mounts it to `./data/jobs.db`
+on the host so it survives container restarts. Skip this and you'll need to
+resync from scratch every time you recreate the container.
+
+### Updating
+
+```bash
+git pull
+bash docker-build.sh        # add your API URL if using a reverse proxy
+docker compose -f docker-compose.example.yml up -d --force-recreate
+```
 
 ## REST API (Summary)
 
