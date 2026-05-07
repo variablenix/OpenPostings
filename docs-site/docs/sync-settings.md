@@ -57,6 +57,14 @@ This controls backend ATS request parallelism.
 
 ![ATS request queue concurrency](/sync_settings_2.png)
 
+## Posting freshness window
+
+This controls the alotment of job postings based on its date freshness.
+
+- Allowed range: 24 to 168 hours
+
+![ATS request queue concurrency](/sync_settings_6.png)
+
 ## Sync ATS Filters
 
 You can enable or disable specific ATSs for syncing.

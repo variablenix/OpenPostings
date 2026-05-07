@@ -211,6 +211,7 @@ const MCP_SETTINGS_DEFAULTS = {
 };
 const ATS_FILTER_OPTIONS = new Set([
   "adp_myjobs",
+  "paycomonline",
   "adp_workforcenow",
   "applitrack",
   "applicantai",
@@ -227,6 +228,24 @@ const ATS_FILTER_OPTIONS = new Set([
   "eightfold",
   "fountain",
   "freshteam",
+  "agilehr",
+  "avature",
+  "comeet",
+  "factorialhr",
+  "hireology",
+  "hiringplatform",
+  "homerun",
+  "jibeapply",
+  "jobs2web",
+  "occupop",
+  "peopleadmin",
+  "personio",
+  "recruiterflow",
+  "softgarden",
+  "trakstar",
+  "ycombinator",
+  "yello",
+  "crelate",
   "gem",
   "getro",
   "governmentjobs",
@@ -238,6 +257,9 @@ const ATS_FILTER_OPTIONS = new Set([
   "calcareers",
   "calopps",
   "statejobsny",
+  "edjoin",
+  "webcruiter",
+  "academicjobsonline",
   "hibob",
   "isolvisolvedhire",
   "greenhouse",
@@ -267,6 +289,7 @@ const ATS_FILTER_OPTIONS = new Set([
   "talexio",
   "teamtailor",
   "theapplicantmanager",
+  "ukg",
   "ultipro",
   "workday",
   "zoho"
@@ -328,7 +351,23 @@ function inferAtsFromJobPostingUrl(value) {
     return "applitrack";
   }
   if (url.includes(".careers.hibob.com/job/")) return "hibob";
+  if (url.includes(".hiringplatform.com/") && /\/\d+\/(?:en|fr)(?:\?|$)/.test(url)) return "hiringplatform";
+  if (url.includes(".homerun.co/")) return "homerun";
+  if (url.includes(".jibeapply.com/")) return "jibeapply";
+  if (url.includes(".jobs2web.com/job/")) return "jobs2web";
+  if (url.includes(".occupop-careers.com/job/")) return "occupop";
+  if (url.includes(".peopleadmin.com/postings/")) return "peopleadmin";
+  if (url.includes(".jobs.personio.com/job/")) return "personio";
+  if (/recruiterflow\.com\/[^/]+\/jobs\/\d+/.test(url)) return "recruiterflow";
+  if (url.includes(".softgarden.io/job/")) return "softgarden";
+  if (url.includes(".hire.trakstar.com/jobs/")) return "trakstar";
+  if (url.includes(".recruiterbox.com/jobs/")) return "trakstar";
+  if (url.includes(".trakstarhire.com/jobs/")) return "trakstar";
+  if (url.includes("ycombinator.com/companies/") && url.includes("/jobs")) return "ycombinator";
+  if (url.includes(".yello.co/jobs/")) return "yello";
   if (url.includes(".isolvedhire.com/jobs/")) return "isolvisolvedhire";
+  if (url.includes("/careers/jobdetail/")) return "avature";
+  if (url.includes("www.comeet.com/jobs/") || url.includes("comeet.com/jobs/")) return "comeet";
   if (url.includes(".applytojob.com/apply")) return "applytojob";
   if (url.includes(".icims.com/jobs/")) return "icims";
   if (url.includes("theapplicantmanager.com/jobs")) return "theapplicantmanager";
@@ -350,6 +389,10 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes("calcareers.ca.gov/calhrpublic/jobs/jobposting.aspx?jobcontrolid=")) return "calcareers";
   if (url.includes("calopps.org/") && url.includes("/job-")) return "calopps";
   if (url.includes("statejobsny.com/public/vacancydetailsview.cfm?id=")) return "statejobsny";
+  if (url.includes("edjoin.org/home/jobposting/")) return "edjoin";
+  if (url.includes(".webcruiter.no/main/recruit/public/")) return "webcruiter";
+  if (url.includes("candidate.webcruiter.com/en-gb/jobs/")) return "webcruiter";
+  if (url.includes("academicjobsonline.org/ajo/jobs/")) return "academicjobsonline";
   if (url.includes(".hrmdirect.com/employment/job-opening.php")) return "hrmdirect";
   if (url.includes(".talentlyft.com/jobs/")) return "talentlyft";
   if (url.includes(".talexio.com/jobs")) return "talexio";
@@ -357,6 +400,8 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.endsWith(".teamtailor.com/jobs")) return "teamtailor";
   if (url.includes(".freshteam.com/jobs/")) return "freshteam";
   if (url.endsWith(".freshteam.com/jobs")) return "freshteam";
+  if (url.includes(".agilehr.com/application/login.aspx")) return "agilehr";
+  if (url.includes(".agilehr.com/careerportal/jobs.aspx")) return "agilehr";
   if (url.includes("talent.sage.hr/jobs/")) return "sagehr";
   if (url.includes("www.talent.sage.hr/jobs/")) return "sagehr";
   if (url.includes("app.loxo.co/job/")) return "loxo";
@@ -375,6 +420,7 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes(".jobs.hr.cloud.sap/job/")) return "saphrcloud";
   if (url.includes(".jobs.hr.cloud.sap/search/")) return "saphrcloud";
   if (url.includes("myjobs.adp.com/") && url.includes("/cx/job-details")) return "adp_myjobs";
+  if (url.includes("paycomonline.net/v4/ats/web.php/jobs/viewjobdetails?job=")) return "paycomonline";
   if (url.includes("workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html")) return "adp_workforcenow";
   if (url.includes("workforcenow.adp.com/jobs/apply/posting.html")) return "adp_workforcenow";
   if (url.includes("careerspage.io/")) {
@@ -407,6 +453,7 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes("www.careers-page.com/") && (url.includes("/job/") || url.includes("/jobs/"))) return "manatal";
   if (url.includes(".recruitee.com")) return "recruitee";
   if (url.includes("recruiting.ultipro.com/") && url.includes("/jobboard/")) return "ultipro";
+  if (url.includes(".rec.pro.ukg.net/") && url.includes("/jobboard/")) return "ukg";
   if (url.includes(".taleo.net/careersection/")) return "taleo";
   return "";
 }
@@ -428,6 +475,81 @@ function normalizeAtsFilters(value) {
       }
       if (normalized === "hibob.com" || normalized === "hibobcom" || normalized === "hibob" || normalized === "careers.hibob.com" || normalized === "careershibobcom") {
         return "hibob";
+      }
+      if (normalized === "hiringplatform" || normalized === "hiringplatform.com" || normalized === "hiringplatformcom") {
+        return "hiringplatform";
+      }
+      if (normalized === "homerun" || normalized === "homerun.co" || normalized === "homerunco") {
+        return "homerun";
+      }
+      if (normalized === "jibeapply" || normalized === "jibeapply.com" || normalized === "jibeapplycom") {
+        return "jibeapply";
+      }
+      if (normalized === "jobs2web" || normalized === "jobs2web.com" || normalized === "jobs2webcom") {
+        return "jobs2web";
+      }
+      if (
+        normalized === "occupop" ||
+        normalized === "occupop.com" ||
+        normalized === "occupopcom" ||
+        normalized === "occupop-careers.com" ||
+        normalized === "occupopcareerscom"
+      ) {
+        return "occupop";
+      }
+      if (
+        normalized === "peopleadmin" ||
+        normalized === "peopleadmin.com" ||
+        normalized === "peopleadmincom"
+      ) {
+        return "peopleadmin";
+      }
+      if (
+        normalized === "personio" ||
+        normalized === "personio.com" ||
+        normalized === "personiocom" ||
+        normalized === "jobs.personio.com" ||
+        normalized === "jobspersoniocom"
+      ) {
+        return "personio";
+      }
+      if (
+        normalized === "recruiterflow" ||
+        normalized === "recruiterflow.com" ||
+        normalized === "recruiterflowcom" ||
+        normalized === "www.recruiterflow.com" ||
+        normalized === "wwwrecruiterflowcom"
+      ) {
+        return "recruiterflow";
+      }
+      if (
+        normalized === "trakstar" ||
+        normalized === "hire.trakstar.com" ||
+        normalized === "hiretrakstarcom" ||
+        normalized === "recruiterbox.com" ||
+        normalized === "recruiterboxcom" ||
+        normalized === "trakstarhire.com" ||
+        normalized === "trakstarhirecom"
+      ) {
+        return "trakstar";
+      }
+      if (
+        normalized === "ycombinator" ||
+        normalized === "ycombinator.com" ||
+        normalized === "ycombinatorcom" ||
+        normalized === "www.ycombinator.com" ||
+        normalized === "wwwycombinatorcom"
+      ) {
+        return "ycombinator";
+      }
+      if (
+        normalized === "yello" ||
+        normalized === "yello.co" ||
+        normalized === "yelloco" ||
+        normalized === "www.yello.co" ||
+        normalized === "wwwyelloco"
+      ) {
+        return "yello";
       }
       if (normalized === "isolvisolvedhire" || normalized === "isolvedhire" || normalized === "isolvedhire.com" || normalized === "isolvedhirecom") {
         return "isolvisolvedhire";
@@ -491,6 +613,33 @@ function normalizeAtsFilters(value) {
         return "statejobsny";
       }
       if (
+        normalized === "edjoin" ||
+        normalized === "edjoin.org" ||
+        normalized === "edjoinorg" ||
+        normalized === "www.edjoin.org" ||
+        normalized === "wwwedjoinorg"
+      ) {
+        return "edjoin";
+      }
+      if (
+        normalized === "webcruiter" ||
+        normalized === "webcruiter.com" ||
+        normalized === "webcruitercom" ||
+        normalized === "candidate.webcruiter.com" ||
+        normalized === "candidatewebcruitercom"
+      ) {
+        return "webcruiter";
+      }
+      if (
+        normalized === "academicjobsonline" ||
+        normalized === "academicjobsonline.org" ||
+        normalized === "academicjobsonlineorg" ||
+        normalized === "www.academicjobsonline.org" ||
+        normalized === "wwwacademicjobsonlineorg"
+      ) {
+        return "academicjobsonline";
+      }
+      if (
         normalized === "smartrecruiters.com" ||
         normalized === "smartrecruiterscom" ||
         normalized === "jobs.smartrecruiters.com" ||
@@ -504,6 +653,9 @@ function normalizeAtsFilters(value) {
       if (normalized === "talexio.com" || normalized === "talexiocom") return "talexio";
       if (normalized === "teamtailor.com" || normalized === "teamtailorcom") return "teamtailor";
       if (normalized === "freshteam.com" || normalized === "freshteamcom") return "freshteam";
+      if (normalized === "agilehr.com" || normalized === "agilehrcom" || normalized === "agilehr") return "agilehr";
+      if (normalized === "avature" || normalized === "avature.net" || normalized === "avaturenet") return "avature";
+      if (normalized === "comeet" || normalized === "comeet.com" || normalized === "comeetcom" || normalized === "www.comeet.com" || normalized === "wwwcomeetcom") return "comeet";
       if (normalized === "sagehr" || normalized === "sage.hr" || normalized === "talent.sage.hr" || normalized === "talentsagehr") return "sagehr";
       if (normalized === "loxo.co" || normalized === "loxoco" || normalized === "app.loxo.co" || normalized === "apploxoco") return "loxo";
       if (normalized === "peopleforce.io" || normalized === "peopleforceio") return "peopleforce";
@@ -523,6 +675,15 @@ function normalizeAtsFilters(value) {
         return "saphrcloud";
       }
       if (normalized === "adp_myjobs" || normalized === "adpmyjobs") return "adp_myjobs";
+      if (
+        normalized === "paycomonline" ||
+        normalized === "paycomonline.net" ||
+        normalized === "paycomonlinenet" ||
+        normalized === "www.paycomonline.net" ||
+        normalized === "wwwpaycomonlinenet"
+      ) {
+        return "paycomonline";
+      }
       if (normalized === "adp_workforcenow" || normalized === "adpworkforcenow" || normalized === "workforcenow.adp.com" || normalized === "workforcenowadpcom") {
         return "adp_workforcenow";
       }
@@ -542,7 +703,15 @@ function normalizeAtsFilters(value) {
         return "brassring";
       }
       if (normalized === "recruiteecom" || normalized === "recruitee.com") return "recruitee";
-      if (normalized === "ukg") return "ultipro";
+      if (
+        normalized === "ukg" ||
+        normalized === "ukg.net" ||
+        normalized === "ukgnet" ||
+        normalized === "rec.pro.ukg.net" ||
+        normalized === "recproukgnet"
+      ) {
+        return "ukg";
+      }
       if (normalized === "taleonet" || normalized === "taleo.net") return "taleo";
       return normalized;
     })

@@ -71,8 +71,12 @@ const MAX_SYNC_INTERVAL_SECONDS = 24 * 60 * 60;
 const DEFAULT_ATS_REQUEST_QUEUE_CONCURRENCY = 1;
 const MIN_ATS_REQUEST_QUEUE_CONCURRENCY = 1;
 const MAX_ATS_REQUEST_QUEUE_CONCURRENCY = 20;
+const DEFAULT_POSTING_FRESHNESS_HOURS = 24;
+const MIN_POSTING_FRESHNESS_HOURS = 24;
+const MAX_POSTING_FRESHNESS_HOURS = 24 * 7;
 const DEFAULT_ATS_FILTER_OPTIONS = [
   { value: "adp_myjobs", label: "ADP MyJobs" },
+  { value: "paycomonline", label: "PaycomOnline" },
   { value: "adp_workforcenow", label: "ADP Workforce Now" },
   { value: "applicantai", label: "ApplicantAI" },
   { value: "applitrack", label: "Applitrack" },
@@ -89,6 +93,25 @@ const DEFAULT_ATS_FILTER_OPTIONS = [
   { value: "eightfold", label: "Eightfold" },
   { value: "fountain", label: "Fountain" },
   { value: "freshteam", label: "Freshteam" },
+  { value: "agilehr", label: "AgileHR" },
+  { value: "avature", label: "Avature" },
+  { value: "comeet", label: "Comeet" },
+  { value: "factorialhr", label: "FactorialHR" },
+  { value: "hireology", label: "Hireology" },
+  { value: "crelate", label: "Crelate" },
+  { value: "hiringplatform", label: "HiringPlatform" },
+  { value: "homerun", label: "Homerun" },
+  { value: "jibeapply", label: "JibeApply" },
+  { value: "jobs2web", label: "Jobs2Web" },
+  { value: "occupop", label: "Occupop" },
+  { value: "peopleadmin", label: "PeopleAdmin" },
+  { value: "personio", label: "Personio" },
+  { value: "recruiterflow", label: "Recruiterflow" },
+  { value: "softgarden", label: "Softgarden" },
+  { value: "trakstar", label: "Trakstar" },
+  { value: "ukg", label: "UKG" },
+  { value: "ycombinator", label: "YCombinator" },
+  { value: "yello", label: "Yello" },
   { value: "gem", label: "Gem" },
   { value: "getro", label: "Getro" },
   { value: "governmentjobs", label: "GovernmentJobs" },
@@ -100,6 +123,9 @@ const DEFAULT_ATS_FILTER_OPTIONS = [
   { value: "calcareers", label: "CalCareers" },
   { value: "calopps", label: "CalOpps" },
   { value: "statejobsny", label: "StateJobsNY" },
+  { value: "edjoin", label: "EdJoin" },
+  { value: "webcruiter", label: "Webcruiter" },
+  { value: "academicjobsonline", label: "AcademicJobsOnline" },
   { value: "hibob", label: "HiBob" },
   { value: "isolvisolvedhire", label: "isolvedhire" },
   { value: "greenhouse", label: "Greenhouse" },
@@ -135,6 +161,7 @@ const DEFAULT_ATS_FILTER_OPTIONS = [
 ];
 const ATS_LABEL_BY_VALUE = {
   adp_myjobs: "ADP MyJobs",
+  paycomonline: "PaycomOnline",
   adp_workforcenow: "ADP Workforce Now",
   applicantai: "ApplicantAI",
   applitrack: "Applitrack",
@@ -151,6 +178,25 @@ const ATS_LABEL_BY_VALUE = {
   eightfold: "Eightfold",
   fountain: "Fountain",
   freshteam: "Freshteam",
+  agilehr: "AgileHR",
+  avature: "Avature",
+  comeet: "Comeet",
+  factorialhr: "FactorialHR",
+  hireology: "Hireology",
+  crelate: "Crelate",
+  hiringplatform: "HiringPlatform",
+  homerun: "Homerun",
+  jibeapply: "JibeApply",
+  jobs2web: "Jobs2Web",
+  occupop: "Occupop",
+  peopleadmin: "PeopleAdmin",
+  personio: "Personio",
+  recruiterflow: "Recruiterflow",
+  softgarden: "Softgarden",
+  trakstar: "Trakstar",
+  ukg: "UKG",
+  ycombinator: "YCombinator",
+  yello: "Yello",
   gem: "Gem",
   getro: "Getro",
   governmentjobs: "GovernmentJobs",
@@ -162,6 +208,9 @@ const ATS_LABEL_BY_VALUE = {
   calcareers: "CalCareers",
   calopps: "CalOpps",
   statejobsny: "StateJobsNY",
+  edjoin: "EdJoin",
+  webcruiter: "Webcruiter",
+  academicjobsonline: "AcademicJobsOnline",
   hibob: "HiBob",
   isolvisolvedhire: "isolvedhire",
   greenhouse: "Greenhouse",
@@ -333,9 +382,90 @@ function normalizeAtsValue(value) {
   }
   if (normalized === "jobvitecom" || normalized === "jobvite.com") return "jobvite";
   if (normalized === "hibob.com" || normalized === "hibobcom" || normalized === "hibob" || normalized === "careers.hibob.com" || normalized === "careershibobcom") return "hibob";
+  if (normalized === "hiringplatform" || normalized === "hiringplatform.com" || normalized === "hiringplatformcom") {
+    return "hiringplatform";
+  }
+  if (normalized === "homerun" || normalized === "homerun.co" || normalized === "homerunco") {
+    return "homerun";
+  }
+  if (normalized === "jibeapply" || normalized === "jibeapply.com" || normalized === "jibeapplycom") {
+    return "jibeapply";
+  }
+  if (normalized === "jobs2web" || normalized === "jobs2web.com" || normalized === "jobs2webcom") {
+    return "jobs2web";
+  }
+  if (
+    normalized === "occupop" ||
+    normalized === "occupop.com" ||
+    normalized === "occupopcom" ||
+    normalized === "occupop-careers.com" ||
+    normalized === "occupopcareerscom"
+  ) {
+    return "occupop";
+  }
+  if (
+    normalized === "peopleadmin" ||
+    normalized === "peopleadmin.com" ||
+    normalized === "peopleadmincom"
+  ) {
+    return "peopleadmin";
+  }
+  if (
+    normalized === "personio" ||
+    normalized === "personio.com" ||
+    normalized === "personiocom" ||
+    normalized === "jobs.personio.com" ||
+    normalized === "jobspersoniocom"
+  ) {
+    return "personio";
+  }
+  if (
+    normalized === "recruiterflow" ||
+    normalized === "recruiterflow.com" ||
+    normalized === "recruiterflowcom" ||
+    normalized === "www.recruiterflow.com" ||
+    normalized === "wwwrecruiterflowcom"
+  ) {
+    return "recruiterflow";
+  }
+  if (normalized === "softgarden" || normalized === "softgarden.io" || normalized === "softgardenio") {
+    return "softgarden";
+  }
+  if (
+    normalized === "trakstar" ||
+    normalized === "hire.trakstar.com" ||
+    normalized === "hiretrakstarcom" ||
+    normalized === "recruiterbox.com" ||
+    normalized === "recruiterboxcom" ||
+    normalized === "trakstarhire.com" ||
+    normalized === "trakstarhirecom"
+  ) {
+    return "trakstar";
+  }
+  if (
+    normalized === "ycombinator" ||
+    normalized === "ycombinator.com" ||
+    normalized === "ycombinatorcom" ||
+    normalized === "www.ycombinator.com" ||
+    normalized === "wwwycombinatorcom"
+  ) {
+    return "ycombinator";
+  }
+  if (
+    normalized === "yello" ||
+    normalized === "yello.co" ||
+    normalized === "yelloco" ||
+    normalized === "www.yello.co" ||
+    normalized === "wwwyelloco"
+  ) {
+    return "yello";
+  }
   if (normalized === "isolvisolvedhire" || normalized === "isolvedhire" || normalized === "isolvedhire.com" || normalized === "isolvedhirecom") {
     return "isolvisolvedhire";
   }
+  if (normalized === "agilehr.com" || normalized === "agilehrcom" || normalized === "agilehr") return "agilehr";
+  if (normalized === "avature" || normalized === "avature.net" || normalized === "avaturenet") return "avature";
+  if (normalized === "comeet" || normalized === "comeet.com" || normalized === "comeetcom" || normalized === "www.comeet.com" || normalized === "wwwcomeetcom") return "comeet";
   if (normalized === "applicantprocom" || normalized === "applicantpro.com") return "applicantpro";
   if (normalized === "applitrackcom" || normalized === "applitrack.com") return "applitrack";
   if (normalized === "bamboohrcom" || normalized === "bamboohr.com") return "bamboohr";
@@ -348,6 +478,9 @@ function normalizeAtsValue(value) {
   if (normalized === "calcareers" || normalized === "calcareers.ca.gov" || normalized === "www.calcareers.ca.gov" || normalized === "calcareerscagov" || normalized === "wwwcalcareerscagov") return "calcareers";
   if (normalized === "calopps" || normalized === "calopps.org" || normalized === "www.calopps.org" || normalized === "caloppsorg" || normalized === "wwwcaloppsorg") return "calopps";
   if (normalized === "statejobsny" || normalized === "statejobsny.com" || normalized === "www.statejobsny.com" || normalized === "statejobsnycom" || normalized === "wwwstatejobsnycom") return "statejobsny";
+  if (normalized === "edjoin" || normalized === "edjoin.org" || normalized === "www.edjoin.org" || normalized === "edjoinorg" || normalized === "wwwedjoinorg") return "edjoin";
+  if (normalized === "webcruiter" || normalized === "webcruiter.com" || normalized === "webcruitercom" || normalized === "candidate.webcruiter.com" || normalized === "candidatewebcruitercom") return "webcruiter";
+  if (normalized === "academicjobsonline" || normalized === "academicjobsonline.org" || normalized === "www.academicjobsonline.org" || normalized === "academicjobsonlineorg" || normalized === "wwwacademicjobsonlineorg") return "academicjobsonline";
   if (
     normalized === "smartrecruiterscom" ||
     normalized === "smartrecruiters.com" ||
@@ -387,6 +520,7 @@ function normalizeAtsValue(value) {
     return "talentreef";
   }
   if (normalized === "adp_myjobs" || normalized === "adpmyjobs") return "adp_myjobs";
+  if (normalized === "paycomonline" || normalized === "paycomonline.net" || normalized === "paycomonlinenet" || normalized === "www.paycomonline.net" || normalized === "wwwpaycomonlinenet") return "paycomonline";
   if (
     normalized === "paylocity" ||
     normalized === "paylocity.com" ||
@@ -428,7 +562,15 @@ function normalizeAtsValue(value) {
     return "saphrcloud";
   }
   if (normalized === "recruiteecom" || normalized === "recruitee.com") return "recruitee";
-  if (normalized === "ukg") return "ultipro";
+  if (
+    normalized === "ukg" ||
+    normalized === "ukg.net" ||
+    normalized === "ukgnet" ||
+    normalized === "rec.pro.ukg.net" ||
+    normalized === "recproukgnet"
+  ) {
+    return "ukg";
+  }
   if (normalized === "taleonet" || normalized === "taleo.net") return "taleo";
   return normalized;
 }
@@ -496,6 +638,14 @@ function normalizeAtsRequestQueueConcurrency(value) {
   return parsed;
 }
 
+function normalizePostingFreshnessHours(value) {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_POSTING_FRESHNESS_HOURS;
+  if (parsed < MIN_POSTING_FRESHNESS_HOURS) return MIN_POSTING_FRESHNESS_HOURS;
+  if (parsed > MAX_POSTING_FRESHNESS_HOURS) return MAX_POSTING_FRESHNESS_HOURS;
+  return parsed;
+}
+
 function normalizeSyncEnabledAts(value, fallback = DEFAULT_ATS_FILTER_OPTIONS.map((option) => option.value)) {
   const allowed = new Set(DEFAULT_ATS_FILTER_OPTIONS.map((option) => option.value));
   const source = Array.isArray(value) ? value : [];
@@ -522,6 +672,10 @@ function createDefaultSyncServiceSettings() {
   return {
     ats_request_queue_concurrency: String(DEFAULT_ATS_REQUEST_QUEUE_CONCURRENCY),
     sync_enabled_ats: DEFAULT_ATS_FILTER_OPTIONS.map((option) => option.value),
+    posting_freshness_hours: String(DEFAULT_POSTING_FRESHNESS_HOURS),
+    active_posting_freshness_hours: String(DEFAULT_POSTING_FRESHNESS_HOURS),
+    min_posting_freshness_hours: MIN_POSTING_FRESHNESS_HOURS,
+    max_posting_freshness_hours: MAX_POSTING_FRESHNESS_HOURS,
     active_ats_request_queue_concurrency: String(DEFAULT_ATS_REQUEST_QUEUE_CONCURRENCY),
     min_ats_request_queue_concurrency: MIN_ATS_REQUEST_QUEUE_CONCURRENCY,
     max_ats_request_queue_concurrency: MAX_ATS_REQUEST_QUEUE_CONCURRENCY,
@@ -536,13 +690,27 @@ function toFormSyncServiceSettings(value) {
   const active = normalizeAtsRequestQueueConcurrency(
     source.active_ats_request_queue_concurrency ?? configured
   );
+  const postingFreshness = normalizePostingFreshnessHours(source.posting_freshness_hours);
+  const activePostingFreshness = normalizePostingFreshnessHours(
+    source.active_posting_freshness_hours ?? postingFreshness
+  );
   const syncEnabledAts = normalizeSyncEnabledAts(source.sync_enabled_ats, defaults.sync_enabled_ats);
   const minValue = normalizeAtsRequestQueueConcurrency(source.min_ats_request_queue_concurrency || defaults.min_ats_request_queue_concurrency);
   const maxValue = normalizeAtsRequestQueueConcurrency(source.max_ats_request_queue_concurrency || defaults.max_ats_request_queue_concurrency);
+  const minPostingFreshness = normalizePostingFreshnessHours(
+    source.min_posting_freshness_hours || defaults.min_posting_freshness_hours
+  );
+  const maxPostingFreshness = normalizePostingFreshnessHours(
+    source.max_posting_freshness_hours || defaults.max_posting_freshness_hours
+  );
 
   return {
     ats_request_queue_concurrency: String(configured),
     sync_enabled_ats: syncEnabledAts,
+    posting_freshness_hours: String(postingFreshness),
+    active_posting_freshness_hours: String(activePostingFreshness),
+    min_posting_freshness_hours: Math.min(minPostingFreshness, maxPostingFreshness),
+    max_posting_freshness_hours: Math.max(minPostingFreshness, maxPostingFreshness),
     active_ats_request_queue_concurrency: String(active),
     min_ats_request_queue_concurrency: Math.min(minValue, maxValue),
     max_ats_request_queue_concurrency: Math.max(minValue, maxValue),
@@ -1156,10 +1324,17 @@ export default function App() {
     const excludedByDate = Number(
       status.excluded_during_sync_by_posting_date ?? summary.excluded_during_sync_by_posting_date ?? 0
     );
+    const freshnessHours = Number(
+      status.active_posting_freshness_hours ??
+        status.posting_freshness_hours ??
+        syncServiceSettings.active_posting_freshness_hours ??
+        syncServiceSettings.posting_freshness_hours ??
+        DEFAULT_POSTING_FRESHNESS_HOURS
+    );
     const syncEnabledCompanies = Number(status.sync_enabled_company_count ?? summary.sync_enabled_company_count ?? 0);
     const excludedAtsCount = Number(status.excluded_ats_count ?? summary.excluded_ats_count ?? 0);
     const failedCompanies = Number(status.failed_companies ?? summary.failed_companies ?? 0);
-    const base = `Last sync: ${syncTime} | Sync-enabled companies: ${syncEnabledCompanies} | Stored today: ${status.posting_count || 0} | Failed companies: ${failedCompanies} | Excluded by 24h: ${excludedByDate} | Excluded ATS: ${excludedAtsCount}`;
+    const base = `Last sync: ${syncTime} | Sync-enabled companies: ${syncEnabledCompanies} | Stored today: ${status.posting_count || 0} | Failed companies: ${failedCompanies} | Excluded by ${freshnessHours}h window: ${excludedByDate} | Excluded ATS: ${excludedAtsCount}`;
     if (status.running && status.progress) {
       const collectedCount = Number(status.progress.total_collected || 0);
       const storedCount = Number(status.posting_count || 0);
@@ -1171,7 +1346,7 @@ export default function App() {
       return `${base} | Syncing ${status.progress.current}/${status.progress.total}: ${syncingCompanyName} (collected ${collectedCount})${liveSyncHint}`;
     }
     return base;
-  }, [status]);
+  }, [status, syncServiceSettings.active_posting_freshness_hours, syncServiceSettings.posting_freshness_hours]);
 
   useEffect(() => {
     if (postingsFilters.ats === "all") return;
@@ -1400,6 +1575,9 @@ export default function App() {
     const atsRequestQueueConcurrency = normalizeAtsRequestQueueConcurrency(
       syncServiceSettings.ats_request_queue_concurrency
     );
+    const postingFreshnessHours = normalizePostingFreshnessHours(
+      syncServiceSettings.posting_freshness_hours
+    );
     const syncEnabledAts = normalizeSyncEnabledAts(syncServiceSettings.sync_enabled_ats);
 
     setSyncSettings((prev) => ({
@@ -1409,7 +1587,8 @@ export default function App() {
     setSyncServiceSettings((prev) => ({
       ...prev,
       ats_request_queue_concurrency: String(atsRequestQueueConcurrency),
-      sync_enabled_ats: syncEnabledAts
+      sync_enabled_ats: syncEnabledAts,
+      posting_freshness_hours: String(postingFreshnessHours)
     }));
 
     const intervalLabel = formatSyncIntervalLabel(syncIntervalSeconds);
@@ -1424,6 +1603,7 @@ export default function App() {
 
     queueFrontendLog("info", "save_sync_settings_started", "Saving sync settings.", {
       ats_request_queue_concurrency: atsRequestQueueConcurrency,
+      posting_freshness_hours: postingFreshnessHours,
       sync_enabled_ats_count: syncEnabledAts.length
     });
 
@@ -1431,25 +1611,28 @@ export default function App() {
     try {
       const response = await saveSyncServiceSettings({
         ats_request_queue_concurrency: atsRequestQueueConcurrency,
-        sync_enabled_ats: syncEnabledAts
+        sync_enabled_ats: syncEnabledAts,
+        posting_freshness_hours: postingFreshnessHours
       });
       const saved = toFormSyncServiceSettings(response?.item);
       setSyncServiceSettings(saved);
       queueFrontendLog("info", "save_sync_settings_completed", "Sync settings saved successfully.", {
         ats_request_queue_concurrency: saved.ats_request_queue_concurrency,
+        posting_freshness_hours: saved.posting_freshness_hours,
         sync_enabled_ats_count: saved.sync_enabled_ats.length
       });
       setSyncSettingsNotice(
-        `${localSavedMessage} ATS request queue concurrency saved as ${saved.ats_request_queue_concurrency}. Sync-enabled ATS: ${saved.sync_enabled_ats.length}. This will take effect next time you stop and restart the sync service.`
+        `${localSavedMessage} ATS request queue concurrency saved as ${saved.ats_request_queue_concurrency}. Posting freshness window saved as ${saved.posting_freshness_hours} hours. Sync-enabled ATS: ${saved.sync_enabled_ats.length}. Queue concurrency takes effect next time you stop and restart the sync service. Posting freshness applies immediately.`
       );
     } catch (e) {
       setError(String(e.message || e));
       queueFrontendLog("error", "save_sync_settings_failed", String(e?.stack || e?.message || e), {
         ats_request_queue_concurrency: atsRequestQueueConcurrency,
+        posting_freshness_hours: postingFreshnessHours,
         sync_enabled_ats_count: syncEnabledAts.length
       });
       setSyncSettingsNotice(
-        `${localSavedMessage} Unable to save ATS request queue concurrency on the server.`
+        `${localSavedMessage} Unable to save ATS request queue concurrency and posting freshness on the server.`
       );
     } finally {
       setSyncServiceSettingsSaving(false);
@@ -1457,6 +1640,7 @@ export default function App() {
   }, [
     queueFrontendLog,
     syncServiceSettings.ats_request_queue_concurrency,
+    syncServiceSettings.posting_freshness_hours,
     syncServiceSettings.sync_enabled_ats,
     syncSettings
   ]);
@@ -2480,6 +2664,28 @@ export default function App() {
           <Text style={styles.settingsInlineHint}>
             Runtime is currently using {syncServiceSettings.active_ats_request_queue_concurrency}. This will take effect
             next time you stop and restart the sync service.
+          </Text>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.fieldLabel}>Posting freshness window (hours)</Text>
+          <TextInput
+            style={styles.textField}
+            value={syncServiceSettings.posting_freshness_hours}
+            onChangeText={(value) =>
+              setSyncServiceSettings((prev) => ({
+                ...prev,
+                posting_freshness_hours: value.replace(/[^0-9]/g, "")
+              }))
+            }
+            keyboardType="numeric"
+            placeholder={String(DEFAULT_POSTING_FRESHNESS_HOURS)}
+          />
+          <Text style={styles.settingsInlineHint}>
+            Range: {syncServiceSettings.min_posting_freshness_hours} to {syncServiceSettings.max_posting_freshness_hours} hours.
+          </Text>
+          <Text style={styles.settingsInlineHint}>
+            Runtime is currently using {syncServiceSettings.active_posting_freshness_hours} hours. This applies immediately after saving.
           </Text>
         </View>
 

@@ -26,7 +26,19 @@ const ATS_REQUEST_QUEUE_CONCURRENCY_DEFAULT =
     : 1;
 const MIN_ATS_REQUEST_QUEUE_CONCURRENCY = 1;
 const MAX_ATS_REQUEST_QUEUE_CONCURRENCY = 20;
-const POSTING_TTL_SECONDS = Number(process.env.POSTING_TTL_SECONDS || 24 * 60 * 60);
+const MIN_POSTING_FRESHNESS_HOURS = 24;
+const MAX_POSTING_FRESHNESS_HOURS = 24 * 7;
+const POSTING_TTL_SECONDS_FALLBACK = Number(process.env.POSTING_TTL_SECONDS || 24 * 60 * 60);
+const POSTING_FRESHNESS_HOURS_DEFAULT = (() => {
+  const envHours = Number(process.env.POSTING_FRESHNESS_HOURS);
+  const fromHours = Number.isFinite(envHours) && envHours > 0 ? Math.floor(envHours) : 0;
+  const fromLegacySeconds =
+    Number.isFinite(POSTING_TTL_SECONDS_FALLBACK) && POSTING_TTL_SECONDS_FALLBACK > 0
+      ? Math.max(1, Math.round(POSTING_TTL_SECONDS_FALLBACK / 3600))
+      : 24;
+  const base = fromHours || fromLegacySeconds || 24;
+  return Math.max(MIN_POSTING_FRESHNESS_HOURS, Math.min(MAX_POSTING_FRESHNESS_HOURS, base));
+})();
 const SYNC_POSTING_FLUSH_BATCH_SIZE = Number(process.env.SYNC_POSTING_FLUSH_BATCH_SIZE || 200);
 const WORKDAY_PAGE_SIZE = 20;
 const ULTIPRO_PAGE_SIZE = 50;
@@ -73,6 +85,7 @@ const JOIN_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const TALENTREEF_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const SAPHRCLOUD_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const ADP_MYJOBS_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const PAYCOMONLINE_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const ADP_WORKFORCENOW_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const CAREERSPAGE_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const ORACLE_RATE_LIMIT_WAIT_MS = 60 * 1000;
@@ -89,8 +102,26 @@ const SCHOOLSPRING_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const CALCAREERS_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const CALOPPS_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const STATEJOBSNY_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const EDJOIN_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const WEBCRUITER_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const HIBOB_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const ISOLVISOLVEDHIRE_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const AVATURE_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const COMEET_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const CRELATE_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const CRELATE_MIN_INTERVAL_MS = 3 * 1000;
+const FACTORIALHR_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const HIREOLOGY_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const HIRINGPLATFORM_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const HOMERUN_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const JIBEAPPLY_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const JOBS2WEB_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const OCCUPOP_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const PEOPLEADMIN_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const PERSONIO_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const RECRUITERFLOW_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const SOFTGARDEN_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const TRAKSTAR_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const GOVERNMENTJOBS_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const GOVERNMENTJOBS_ESTIMATED_COMPANY_COUNT = 2400;
 const SMARTRECRUITERS_RATE_LIMIT_WAIT_MS = 1000;
@@ -102,6 +133,9 @@ const SCHOOLSPRING_ESTIMATED_COMPANY_COUNT = 16287;
 const CALCAREERS_ESTIMATED_COMPANY_COUNT = 297;
 const CALOPPS_ESTIMATED_COMPANY_COUNT = 254;
 const STATEJOBSNY_ESTIMATED_COMPANY_COUNT = 165;
+const EDJOIN_ESTIMATED_COMPANY_COUNT = 3182;
+const WEBCRUITER_ESTIMATED_COMPANY_COUNT = 1400;
+const ACADEMICJOBSONLINE_ESTIMATED_COMPANY_COUNT = 2159;
 const SMARTRECRUITERS_INSERT_EVERY_N_TARGETS = 10;
 const execFileAsync = promisify(execFile);
 const SAPHRCLOUD_LOCALE_CANDIDATES = Object.freeze(["en_US", "en_GB"]);
@@ -159,13 +193,16 @@ let syncPromise = null;
 let postingLocationByJobUrl = new Map();
 let postingLocationGeoFilterOptionsCache = {
   mapRef: null,
+  mapSize: -1,
   countries: [],
   regions: []
 };
 const locationGeoInferenceCache = new Map();
 const atsRateLimitStateByKey = new Map();
+const atsFixedIntervalStateByKey = new Map();
 let atsRequestQueueConcurrency = ATS_REQUEST_QUEUE_CONCURRENCY_DEFAULT;
 let syncEnabledAts = new Set();
+let postingFreshnessHours = POSTING_FRESHNESS_HOURS_DEFAULT;
 const syncStatus = {
   running: false,
   started_at: null,
@@ -601,11 +638,15 @@ const ATS_FILTER_OPTIONS = new Set([
   "calcareers",
   "calopps",
   "statejobsny",
+  "edjoin",
+  "webcruiter",
+  "academicjobsonline",
   "hrmdirect",
   "talentlyft",
   "talexio",
   "teamtailor",
   "freshteam",
+  "agilehr",
   "sagehr",
   "loxo",
   "peopleforce",
@@ -619,6 +660,7 @@ const ATS_FILTER_OPTIONS = new Set([
   "talentreef",
   "saphrcloud",
   "adp_myjobs",
+  "paycomonline",
   "adp_workforcenow",
   "careerspage",
   "oracle",
@@ -630,7 +672,32 @@ const ATS_FILTER_OPTIONS = new Set([
   ,
   "applitrack",
   "hibob",
-  "isolvisolvedhire"
+  "isolvisolvedhire",
+  "avature",
+  "comeet",
+  "factorialhr"
+  ,
+  "hireology"
+  ,
+  "crelate",
+  "hiringplatform",
+  "homerun",
+  "jibeapply",
+  "jobs2web"
+  ,
+  "occupop"
+  ,
+  "peopleadmin"
+  ,
+  "personio"
+  ,
+  "recruiterflow"
+  ,
+  "softgarden",
+  "trakstar",
+  "ukg",
+  "ycombinator",
+  "yello"
 ]);
 const ATS_FILTER_OPTION_ITEMS = Object.freeze([
   { value: "workday", label: "Workday" },
@@ -652,6 +719,7 @@ const ATS_FILTER_OPTION_ITEMS = Object.freeze([
   { value: "careerplug", label: "CareerPlug" },
   { value: "bamboohr", label: "BambooHR" },
   { value: "adp_myjobs", label: "ADP MyJobs" },
+  { value: "paycomonline", label: "PaycomOnline" },
   { value: "adp_workforcenow", label: "ADP Workforce Now" },
   { value: "oracle", label: "Oracle" },
   { value: "paylocity", label: "Paylocity" },
@@ -665,8 +733,27 @@ const ATS_FILTER_OPTION_ITEMS = Object.freeze([
   { value: "applitrack", label: "Applitrack" },
   { value: "hibob", label: "HiBob" },
   { value: "isolvisolvedhire", label: "isolvedhire" },
+  { value: "avature", label: "Avature" },
+  { value: "comeet", label: "Comeet" },
+  { value: "factorialhr", label: "FactorialHR" },
+  { value: "hireology", label: "Hireology" },
+  { value: "crelate", label: "Crelate" },
+  { value: "hiringplatform", label: "HiringPlatform" },
+  { value: "homerun", label: "Homerun" },
+  { value: "jibeapply", label: "JibeApply" },
+  { value: "jobs2web", label: "Jobs2Web" },
+  { value: "occupop", label: "Occupop" },
+  { value: "peopleadmin", label: "PeopleAdmin" },
+  { value: "personio", label: "Personio" },
+  { value: "recruiterflow", label: "Recruiterflow" },
+  { value: "softgarden", label: "Softgarden" },
+  { value: "trakstar", label: "Trakstar" },
+  { value: "ukg", label: "UKG" },
+  { value: "ycombinator", label: "YCombinator" },
+  { value: "yello", label: "Yello" },
   { value: "teamtailor", label: "Teamtailor" },
   { value: "freshteam", label: "Freshteam" },
+  { value: "agilehr", label: "AgileHR" },
   { value: "sagehr", label: "SageHR" },
   { value: "loxo", label: "Loxo" },
   { value: "peopleforce", label: "PeopleForce" },
@@ -686,6 +773,9 @@ const ATS_FILTER_OPTION_ITEMS = Object.freeze([
   { value: "calcareers", label: "CalCareers" },
   { value: "calopps", label: "CalOpps" },
   { value: "statejobsny", label: "StateJobsNY" },
+  { value: "edjoin", label: "EdJoin" },
+  { value: "webcruiter", label: "Webcruiter" },
+  { value: "academicjobsonline", label: "AcademicJobsOnline" },
   { value: "hrmdirect", label: "HRMDirect" },
   { value: "talentlyft", label: "Talentlyft" },
   { value: "talexio", label: "Talexio" },
@@ -717,7 +807,8 @@ const MCP_SETTINGS_DEFAULTS = {
 };
 const SYNC_SERVICE_SETTINGS_DEFAULTS = {
   ats_request_queue_concurrency: ATS_REQUEST_QUEUE_CONCURRENCY_DEFAULT,
-  sync_enabled_ats: SYNC_DEFAULT_ENABLED_ATS
+  sync_enabled_ats: SYNC_DEFAULT_ENABLED_ATS,
+  posting_freshness_hours: POSTING_FRESHNESS_HOURS_DEFAULT
 };
 const PHRASE_NGRAM_INDUSTRY_COVERAGE_THRESHOLD = 2;
 const FALLBACK_WORD_INDUSTRY_COVERAGE_THRESHOLD = 2;
@@ -1099,7 +1190,10 @@ function parseCountryFilters(values) {
 }
 
 function getPostingLocationGeoFilterOptions() {
-  if (postingLocationGeoFilterOptionsCache.mapRef === postingLocationByJobUrl) {
+  if (
+    postingLocationGeoFilterOptionsCache.mapRef === postingLocationByJobUrl &&
+    postingLocationGeoFilterOptionsCache.mapSize === postingLocationByJobUrl.size
+  ) {
     return postingLocationGeoFilterOptionsCache;
   }
 
@@ -1131,6 +1225,7 @@ function getPostingLocationGeoFilterOptions() {
 
   postingLocationGeoFilterOptionsCache = {
     mapRef: postingLocationByJobUrl,
+    mapSize: postingLocationByJobUrl.size,
     countries,
     regions
   };
@@ -1582,6 +1677,7 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes("jobs.lever.co")) return "lever";
   if (url.includes(".recruitee.com")) return "recruitee";
   if (url.includes("recruiting.ultipro.com/") && url.includes("/jobboard/")) return "ultipro";
+  if (url.includes(".rec.pro.ukg.net/") && url.includes("/jobboard/")) return "ukg";
   if (url.includes(".taleo.net/careersection/")) return "taleo";
   if ((url.includes("jobs.jobvite.com/") || url.includes("careers.jobvite.com/")) && url.includes("/job/")) {
     return "jobvite";
@@ -1605,6 +1701,10 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes("usajobs.gov/job/")) return "usajobs";
   if (url.includes("k12jobspot.com/job/detail/")) return "k12jobspot";
   if (url.includes("schoolspring.com/job.cfm?jid=")) return "schoolspring";
+  if (url.includes("edjoin.org/home/jobposting/")) return "edjoin";
+  if (url.includes(".webcruiter.no/main/recruit/public/")) return "webcruiter";
+  if (url.includes("candidate.webcruiter.com/en-gb/jobs/")) return "webcruiter";
+  if (url.includes("academicjobsonline.org/ajo/jobs/")) return "academicjobsonline";
   if (url.includes("calcareers.ca.gov/calhrpublic/jobs/jobposting.aspx?jobcontrolid=")) return "calcareers";
   if (url.includes("calopps.org/") && url.includes("/job-")) return "calopps";
   if (url.includes("statejobsny.com/public/vacancydetailsview.cfm?id=")) return "statejobsny";
@@ -1615,6 +1715,8 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.endsWith(".teamtailor.com/jobs")) return "teamtailor";
   if (url.includes(".freshteam.com/jobs/")) return "freshteam";
   if (url.endsWith(".freshteam.com/jobs")) return "freshteam";
+  if (url.includes(".agilehr.com/application/login.aspx")) return "agilehr";
+  if (url.includes(".agilehr.com/careerportal/jobs.aspx")) return "agilehr";
   if (url.includes("talent.sage.hr/jobs/")) return "sagehr";
   if (url.includes("www.talent.sage.hr/jobs/")) return "sagehr";
   if (url.includes("app.loxo.co/job/")) return "loxo";
@@ -1633,6 +1735,7 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes(".jobs.hr.cloud.sap/job/")) return "saphrcloud";
   if (url.includes(".jobs.hr.cloud.sap/search/")) return "saphrcloud";
   if (url.includes("myjobs.adp.com/") && url.includes("/cx/job-details")) return "adp_myjobs";
+  if (url.includes("paycomonline.net/v4/ats/web.php/jobs/viewjobdetails?job=")) return "paycomonline";
   if (url.includes("workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html")) return "adp_workforcenow";
   if (url.includes("workforcenow.adp.com/jobs/apply/posting.html")) return "adp_workforcenow";
   if (url.includes("careerspage.io/")) {
@@ -1664,7 +1767,23 @@ function inferAtsFromJobPostingUrl(value) {
     return "applitrack";
   }
   if (url.includes(".careers.hibob.com/job/")) return "hibob";
+  if (url.includes(".hiringplatform.com/") && /\/\d+\/(?:en|fr)(?:\?|$)/.test(url)) return "hiringplatform";
+  if (url.includes(".homerun.co/")) return "homerun";
+  if (url.includes(".jibeapply.com/")) return "jibeapply";
+  if (url.includes(".jobs2web.com/job/")) return "jobs2web";
+  if (url.includes(".occupop-careers.com/job/")) return "occupop";
+  if (url.includes(".peopleadmin.com/postings/")) return "peopleadmin";
+  if (url.includes(".jobs.personio.com/job/")) return "personio";
+  if (/recruiterflow\.com\/[^/]+\/jobs\/\d+/.test(url)) return "recruiterflow";
+  if (url.includes(".softgarden.io/job/")) return "softgarden";
+  if (url.includes(".hire.trakstar.com/jobs/")) return "trakstar";
+  if (url.includes(".recruiterbox.com/jobs/")) return "trakstar";
+  if (url.includes(".trakstarhire.com/jobs/")) return "trakstar";
+  if (url.includes("ycombinator.com/companies/") && url.includes("/jobs")) return "ycombinator";
+  if (url.includes(".yello.co/jobs/")) return "yello";
   if (url.includes(".isolvedhire.com/jobs/")) return "isolvisolvedhire";
+  if (url.includes("/careers/jobdetail/")) return "avature";
+  if (url.includes("www.comeet.com/jobs/") || url.includes("comeet.com/jobs/")) return "comeet";
   if (url.includes(".careers-page.com/jobs/")) return "manatal";
   if (url.includes(".careers-page.com/job/")) return "manatal";
   if (url.includes("www.careers-page.com/") && (url.includes("/job/") || url.includes("/jobs/"))) {
@@ -1679,12 +1798,99 @@ function normalizeAtsFilterValue(value) {
   if (normalized === "greenhouseio" || normalized === "greenhouse.io") return "greenhouse";
   if (normalized === "leverco" || normalized === "lever.co") return "lever";
   if (normalized === "recruiteecom" || normalized === "recruitee.com") return "recruitee";
-  if (normalized === "ukg") return "ultipro";
+  if (
+    normalized === "ukg" ||
+    normalized === "ukg.net" ||
+    normalized === "ukgnet" ||
+    normalized === "rec.pro.ukg.net" ||
+    normalized === "recproukgnet"
+  ) {
+    return "ukg";
+  }
   if (normalized === "taleonet" || normalized === "taleo.net") return "taleo";
   if (normalized === "jobvitecom" || normalized === "jobvite.com") return "jobvite";
   if (normalized === "applicantprocom" || normalized === "applicantpro.com") return "applicantpro";
   if (normalized === "hibob.com" || normalized === "hibobcom" || normalized === "hibob" || normalized === "careers.hibob.com" || normalized === "careershibobcom") {
     return "hibob";
+  }
+  if (
+    normalized === "hiringplatform" ||
+    normalized === "hiringplatform.com" ||
+    normalized === "hiringplatformcom"
+  ) {
+    return "hiringplatform";
+  }
+  if (normalized === "homerun" || normalized === "homerun.co" || normalized === "homerunco") {
+    return "homerun";
+  }
+  if (normalized === "jibeapply" || normalized === "jibeapply.com" || normalized === "jibeapplycom") {
+    return "jibeapply";
+  }
+  if (normalized === "jobs2web" || normalized === "jobs2web.com" || normalized === "jobs2webcom") {
+    return "jobs2web";
+  }
+  if (
+    normalized === "occupop" ||
+    normalized === "occupop.com" ||
+    normalized === "occupopcom" ||
+    normalized === "occupop-careers.com" ||
+    normalized === "occupopcareerscom"
+  ) {
+    return "occupop";
+  }
+  if (
+    normalized === "peopleadmin" ||
+    normalized === "peopleadmin.com" ||
+    normalized === "peopleadmincom"
+  ) {
+    return "peopleadmin";
+  }
+  if (
+    normalized === "personio" ||
+    normalized === "personio.com" ||
+    normalized === "personiocom" ||
+    normalized === "jobs.personio.com" ||
+    normalized === "jobspersoniocom"
+  ) {
+    return "personio";
+  }
+  if (
+    normalized === "recruiterflow" ||
+    normalized === "recruiterflow.com" ||
+    normalized === "recruiterflowcom" ||
+    normalized === "www.recruiterflow.com" ||
+    normalized === "wwwrecruiterflowcom"
+  ) {
+    return "recruiterflow";
+  }
+  if (
+    normalized === "trakstar" ||
+    normalized === "hire.trakstar.com" ||
+    normalized === "hiretrakstarcom" ||
+    normalized === "recruiterbox.com" ||
+    normalized === "recruiterboxcom" ||
+    normalized === "trakstarhire.com" ||
+    normalized === "trakstarhirecom"
+  ) {
+    return "trakstar";
+  }
+  if (
+    normalized === "ycombinator" ||
+    normalized === "ycombinator.com" ||
+    normalized === "ycombinatorcom" ||
+    normalized === "www.ycombinator.com" ||
+    normalized === "wwwycombinatorcom"
+  ) {
+    return "ycombinator";
+  }
+  if (
+    normalized === "yello" ||
+    normalized === "yello.co" ||
+    normalized === "yelloco" ||
+    normalized === "www.yello.co" ||
+    normalized === "wwwyelloco"
+  ) {
+    return "yello";
   }
   if (
     normalized === "isolvisolvedhire" ||
@@ -1693,6 +1899,16 @@ function normalizeAtsFilterValue(value) {
     normalized === "isolvedhirecom"
   ) {
     return "isolvisolvedhire";
+  }
+  if (
+    normalized === "avature" ||
+    normalized === "avature.net" ||
+    normalized === "avaturenet"
+  ) {
+    return "avature";
+  }
+  if (normalized === "comeet" || normalized === "comeet.com" || normalized === "comeetcom" || normalized === "www.comeet.com" || normalized === "wwwcomeetcom") {
+    return "comeet";
   }
   if (normalized === "applytojobcom" || normalized === "applytojob.com") return "applytojob";
   if (normalized === "icimscom" || normalized === "icims.com") return "icims";
@@ -1785,6 +2001,33 @@ function normalizeAtsFilterValue(value) {
   ) {
     return "statejobsny";
   }
+  if (
+    normalized === "edjoin" ||
+    normalized === "edjoin.org" ||
+    normalized === "edjoinorg" ||
+    normalized === "www.edjoin.org" ||
+    normalized === "wwwedjoinorg"
+  ) {
+    return "edjoin";
+  }
+  if (
+    normalized === "webcruiter" ||
+    normalized === "webcruiter.com" ||
+    normalized === "webcruitercom" ||
+    normalized === "candidate.webcruiter.com" ||
+    normalized === "candidatewebcruitercom"
+  ) {
+    return "webcruiter";
+  }
+  if (
+    normalized === "academicjobsonline" ||
+    normalized === "academicjobsonline.org" ||
+    normalized === "academicjobsonlineorg" ||
+    normalized === "www.academicjobsonline.org" ||
+    normalized === "wwwacademicjobsonlineorg"
+  ) {
+    return "academicjobsonline";
+  }
   if (normalized === "hrmdirect.com" || normalized === "hrmdirectcom") {
     return "hrmdirect";
   }
@@ -1799,6 +2042,9 @@ function normalizeAtsFilterValue(value) {
   }
   if (normalized === "freshteam.com" || normalized === "freshteamcom") {
     return "freshteam";
+  }
+  if (normalized === "agilehr.com" || normalized === "agilehrcom" || normalized === "agilehr") {
+    return "agilehr";
   }
   if (
     normalized === "sagehr" ||
@@ -1854,6 +2100,15 @@ function normalizeAtsFilterValue(value) {
   }
   if (normalized === "adp_myjobs" || normalized === "adpmyjobs") {
     return "adp_myjobs";
+  }
+  if (
+    normalized === "paycomonline" ||
+    normalized === "paycomonline.net" ||
+    normalized === "paycomonlinenet" ||
+    normalized === "www.paycomonline.net" ||
+    normalized === "wwwpaycomonlinenet"
+  ) {
+    return "paycomonline";
   }
   if (
     normalized === "adp_workforcenow" ||
@@ -2060,6 +2315,16 @@ function normalizeAtsRequestQueueConcurrency(value, fallbackValue = ATS_REQUEST_
   return Math.max(MIN_ATS_REQUEST_QUEUE_CONCURRENCY, Math.min(MAX_ATS_REQUEST_QUEUE_CONCURRENCY, parsed));
 }
 
+function normalizePostingFreshnessHours(value, fallbackValue = POSTING_FRESHNESS_HOURS_DEFAULT) {
+  const fallbackParsed = parsePositiveInteger(fallbackValue) || POSTING_FRESHNESS_HOURS_DEFAULT;
+  const parsed = parsePositiveInteger(value) || fallbackParsed;
+  return Math.max(MIN_POSTING_FRESHNESS_HOURS, Math.min(MAX_POSTING_FRESHNESS_HOURS, parsed));
+}
+
+function getPostingFreshnessWindowSeconds() {
+  return normalizePostingFreshnessHours(postingFreshnessHours) * 60 * 60;
+}
+
 function normalizeSyncEnabledAts(value, fallbackValue = SYNC_DEFAULT_ENABLED_ATS) {
   const fallback = normalizeAtsFilters(Array.isArray(fallbackValue) ? fallbackValue : SYNC_DEFAULT_ENABLED_ATS);
   const normalized = normalizeAtsFilters(Array.isArray(value) ? value : parseJsonArray(value));
@@ -2072,12 +2337,17 @@ function normalizeSyncServiceSettingsInput(value = {}, fallback = SYNC_SERVICE_S
   const source = value && typeof value === "object" ? value : {};
   const fallbackConcurrency = normalizeAtsRequestQueueConcurrency(fallback?.ats_request_queue_concurrency);
   const fallbackEnabledAts = normalizeSyncEnabledAts(fallback?.sync_enabled_ats);
+  const fallbackPostingFreshnessHours = normalizePostingFreshnessHours(fallback?.posting_freshness_hours);
   return {
     ats_request_queue_concurrency: normalizeAtsRequestQueueConcurrency(
       source.ats_request_queue_concurrency,
       fallbackConcurrency
     ),
-    sync_enabled_ats: normalizeSyncEnabledAts(source.sync_enabled_ats, fallbackEnabledAts)
+    sync_enabled_ats: normalizeSyncEnabledAts(source.sync_enabled_ats, fallbackEnabledAts),
+    posting_freshness_hours: normalizePostingFreshnessHours(
+      source.posting_freshness_hours,
+      fallbackPostingFreshnessHours
+    )
   };
 }
 
@@ -2196,7 +2466,7 @@ function shouldStorePostingByDate(postingDate, referenceEpoch = nowEpochSeconds(
 
   const parsedEpoch = parsePostingDateToEpochSeconds(raw, referenceEpoch);
   if (!parsedEpoch) return false;
-  return parsedEpoch >= Number(referenceEpoch) - POSTING_TTL_SECONDS;
+  return parsedEpoch >= Number(referenceEpoch) - getPostingFreshnessWindowSeconds();
 }
 
 function buildJobUrl(companyBaseUrl, externalPath) {
@@ -2336,6 +2606,9 @@ function inferPostingLocationFromJobUrl(jobPostingUrl) {
     if (parsed.hostname === "statejobsny.com" || parsed.hostname === "www.statejobsny.com") {
       return postingLocationByJobUrl.get(url) || null;
     }
+    if (parsed.hostname === "candidate.webcruiter.com" || parsed.hostname.endsWith(".webcruiter.no")) {
+      return postingLocationByJobUrl.get(url) || null;
+    }
     if (parsed.hostname.endsWith(".hrmdirect.com")) {
       return postingLocationByJobUrl.get(url) || null;
     }
@@ -2349,6 +2622,9 @@ function inferPostingLocationFromJobUrl(jobPostingUrl) {
       return postingLocationByJobUrl.get(url) || null;
     }
     if (parsed.hostname.endsWith(".freshteam.com")) {
+      return postingLocationByJobUrl.get(url) || null;
+    }
+    if (parsed.hostname.endsWith(".agilehr.com")) {
       return postingLocationByJobUrl.get(url) || null;
     }
     if (parsed.hostname === "talent.sage.hr" || parsed.hostname === "www.talent.sage.hr") {
@@ -2373,6 +2649,9 @@ function inferPostingLocationFromJobUrl(jobPostingUrl) {
       return postingLocationByJobUrl.get(url) || null;
     }
     if (parsed.hostname === "myjobs.adp.com" || parsed.hostname === "www.myjobs.adp.com") {
+      return postingLocationByJobUrl.get(url) || null;
+    }
+    if (parsed.hostname === "paycomonline.net" || parsed.hostname === "www.paycomonline.net") {
       return postingLocationByJobUrl.get(url) || null;
     }
     if (parsed.hostname === "workforcenow.adp.com" || parsed.hostname === "www.workforcenow.adp.com") {
@@ -2567,6 +2846,31 @@ function parseAdpMyjobsCompany(urlString) {
     companyNameLower: companyName.toLowerCase(),
     boardUrl: `https://myjobs.adp.com/${companyName}/cx/job-listing`,
     careerSiteUrl: `https://myjobs.adp.com/public/staffing/v1/career-site/${encodeURIComponent(companyName)}`
+  };
+}
+
+function parsePaycomonlineCompany(urlString) {
+  const parsed = parseUrl(urlString);
+  if (!parsed) return null;
+
+  const host = String(parsed.hostname || "").toLowerCase();
+  if (host !== "www.paycomonline.net" && host !== "paycomonline.net") return null;
+
+  const path = String(parsed.pathname || "");
+  const clientKeyMatch = path.match(/\/portal\/([A-F0-9]{32})\/career-page/i);
+  const clientKey = String(clientKeyMatch?.[1] || "").trim();
+  if (!clientKey) return null;
+
+  const baseOrigin = `${parsed.protocol}//${parsed.host}`;
+  const boardUrl = `${baseOrigin}/v4/ats/web.php/portal/${clientKey}/career-page`;
+  return {
+    host,
+    clientKey,
+    clientKeyLower: clientKey.toLowerCase(),
+    boardUrl,
+    companyNameUrl: "https://portal-applicant-tracking.us-cent.paycomonline.net/api/ats/company-name",
+    postingsSearchUrl:
+      "https://portal-applicant-tracking.us-cent.paycomonline.net/api/ats/job-posting-previews/search"
   };
 }
 
@@ -7361,6 +7665,38 @@ async function fetchWithAtsRateLimit(rateLimitKey, fallbackWaitMs, url, init = {
   }
 }
 
+async function waitForAtsFixedInterval(rateLimitKey, minimumIntervalMs) {
+  const minInterval = Math.max(0, Number(minimumIntervalMs || 0));
+  if (minInterval <= 0) return;
+
+  const key = String(rateLimitKey || "default");
+  let state = atsFixedIntervalStateByKey.get(key);
+  if (!state) {
+    state = {
+      chain: Promise.resolve(),
+      nextAllowedEpochMs: 0
+    };
+    atsFixedIntervalStateByKey.set(key, state);
+  }
+
+  const previous = state.chain;
+  let release;
+  state.chain = new Promise((resolve) => {
+    release = resolve;
+  });
+
+  await previous;
+  try {
+    const waitMs = Math.max(0, Number(state.nextAllowedEpochMs || 0) - Date.now());
+    if (waitMs > 0) {
+      await sleep(waitMs);
+    }
+    state.nextAllowedEpochMs = Date.now() + minInterval;
+  } finally {
+    release();
+  }
+}
+
 async function fetchWorkdayPage(cxsUrl, limit, offset) {
   const res = await fetchWithAtsRateLimit("workday", WORKDAY_RATE_LIMIT_WAIT_MS, cxsUrl, {
     method: "POST",
@@ -8477,6 +8813,50 @@ async function fetchAdpMyjobsCareerSite(config) {
   return res.json();
 }
 
+function extractPaycomonlineSessionJwt(pageHtml) {
+  const source = String(pageHtml || "");
+  const match = source.match(/"sessionJWT":"([^"]+)"/i);
+  return match?.[1] ? decodeHtmlEntities(String(match[1]).trim()) : "";
+}
+
+function parsePaycomonlinePublishedDateToIso(value) {
+  const raw = decodeHtmlEntities(String(value || "").trim());
+  if (!raw) return null;
+  const mmddMatch = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!mmddMatch) return raw;
+  const month = Number(mmddMatch[1]);
+  const day = Number(mmddMatch[2]);
+  const year = Number(mmddMatch[3]);
+  if (!Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(year)) return raw;
+  const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toISOString();
+}
+
+function parsePaycomonlinePostingsFromPayload(payload, companyName) {
+  const rows = Array.isArray(payload?.jobPostingPreviews) ? payload.jobPostingPreviews : [];
+  const postings = [];
+  const seenUrls = new Set();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const jobId = String(row.jobId || "").trim();
+    if (!jobId) continue;
+    const openAdvertUrl = decodeHtmlEntities(String(row.openAdvertUrl || "").trim());
+    const jobPostingUrl = openAdvertUrl || `https://www.paycomonline.net/v4/ats/web.php/jobs/ViewJobDetails?job=${encodeURIComponent(jobId)}`;
+    if (!jobPostingUrl || seenUrls.has(jobPostingUrl)) continue;
+
+    postings.push({
+      company_name: String(companyName || "").trim() || "Unknown Company",
+      position_name: decodeHtmlEntities(String(row.jobTitle || "").trim()) || "Untitled Position",
+      job_posting_url: jobPostingUrl,
+      posting_date: parsePaycomonlinePublishedDateToIso(row.postedOn),
+      location: decodeHtmlEntities(String(row.locations || "").trim()) || null
+    });
+    seenUrls.add(jobPostingUrl);
+  }
+  return postings;
+}
+
 async function fetchAdpWorkforcenowContentLinks(config) {
   const url =
     `${config.contentLinksBaseUrl}?cid=${encodeURIComponent(config.cid)}` +
@@ -8912,6 +9292,55 @@ async function fetchUltiProSearchResults(config, top, skip) {
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`UltiPro request failed (${res.status}): ${body.slice(0, 180)}`);
+  }
+
+  return res.json();
+}
+
+function parseUkgCompany(urlString) {
+  const parsed = parseUrl(urlString);
+  if (!parsed) return null;
+
+  const host = String(parsed.hostname || "").toLowerCase();
+  if (!host.endsWith(".rec.pro.ukg.net")) return null;
+
+  const pathParts = parsed.pathname
+    .split("/")
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+
+  const jobBoardIndex = pathParts.findIndex((part) => part.toLowerCase() === "jobboard");
+  if (jobBoardIndex <= 0 || jobBoardIndex + 1 >= pathParts.length) return null;
+
+  const companyId = pathParts[jobBoardIndex - 1];
+  const boardId = pathParts[jobBoardIndex + 1];
+  if (!companyId || !boardId) return null;
+
+  return {
+    host,
+    companyId,
+    companyIdLower: companyId.toLowerCase(),
+    boardId,
+    baseBoardUrl: `${parsed.protocol}//${parsed.host}/${companyId}/JobBoard/${boardId}`
+  };
+}
+
+async function fetchUkgSearchResults(config, top, skip) {
+  const apiUrl = `${String(config?.baseBoardUrl || "").replace(/\/+$/, "")}/JobBoardView/LoadSearchResults`;
+  const payload = buildUltiProSearchPayload(top, skip);
+
+  const res = await fetchWithAtsRateLimit("ukg", ULTIPRO_RATE_LIMIT_WAIT_MS, apiUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`UKG request failed (${res.status}): ${body.slice(0, 180)}`);
   }
 
   return res.json();
@@ -9410,6 +9839,115 @@ async function collectPostingsForAdpMyjobsCompany(company) {
     }
 
     const totalCount = Number(responseJson?.count);
+    if (batch.length < pageSize) break;
+    if (Number.isFinite(totalCount) && totalCount >= 0 && skip + pageSize >= totalCount) break;
+  }
+
+  return collected;
+}
+
+async function collectPostingsForPaycomonlineCompany(company) {
+  const config = parsePaycomonlineCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const boardRes = await fetchWithAtsRateLimit("paycomonline", PAYCOMONLINE_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9"
+    }
+  });
+  if (!boardRes.ok) {
+    const body = await boardRes.text();
+    throw new Error(`PaycomOnline board request failed (${boardRes.status}): ${body.slice(0, 180)}`);
+  }
+  const boardHtml = await boardRes.text();
+  const sessionJwt = extractPaycomonlineSessionJwt(boardHtml);
+  if (!sessionJwt) {
+    throw new Error("PaycomOnline sessionJWT not found in board HTML");
+  }
+
+  const apiHeaders = {
+    Accept: "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Content-Type": "application/json",
+    Authorization: sessionJwt,
+    Locale: "en-US",
+    "Translation-Highlights": "false",
+    Origin: "https://www.paycomonline.net",
+    Referer: config.boardUrl
+  };
+
+  let companyNameFromApi = "";
+  const companyNameRes = await fetchWithAtsRateLimit(
+    "paycomonline",
+    PAYCOMONLINE_RATE_LIMIT_WAIT_MS,
+    config.companyNameUrl,
+    { method: "GET", headers: apiHeaders }
+  );
+  if (companyNameRes.ok) {
+    try {
+      const companyNameJson = await companyNameRes.json();
+      companyNameFromApi = decodeHtmlEntities(String(companyNameJson?.companyName || "").trim());
+    } catch {
+      companyNameFromApi = "";
+    }
+  }
+  const companyNameForPostings =
+    normalizedCompanyName || companyNameFromApi || `paycomonline_${String(config.clientKeyLower || "").slice(0, 8)}`;
+
+  const pageSize = 50;
+  const collected = [];
+  const seenUrls = new Set();
+
+  for (let page = 0; page < MAX_PAGES_PER_COMPANY; page += 1) {
+    const skip = page * pageSize;
+    const payload = {
+      skip,
+      take: pageSize,
+      filtersForQuery: {
+        distanceFrom: 0,
+        workEnvironments: [],
+        positionTypes: [],
+        educationLevels: [],
+        categories: [],
+        travelTypes: [],
+        shiftTypes: [],
+        otherFilters: [],
+        keywordSearchText: "",
+        location: "",
+        sortOption: ""
+      }
+    };
+
+    const res = await fetchWithAtsRateLimit(
+      "paycomonline",
+      PAYCOMONLINE_RATE_LIMIT_WAIT_MS,
+      config.postingsSearchUrl,
+      { method: "POST", headers: apiHeaders, body: JSON.stringify(payload) }
+    );
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`PaycomOnline postings request failed (${res.status}): ${body.slice(0, 180)}`);
+    }
+
+    const responseJson = await res.json();
+    const batch = parsePaycomonlinePostingsFromPayload(responseJson, companyNameForPostings);
+    if (batch.length === 0) break;
+
+    let hasWithin24h = false;
+    for (const posting of batch) {
+      const postingUrl = String(posting?.job_posting_url || "").trim();
+      if (!postingUrl || seenUrls.has(postingUrl)) continue;
+      if (!shouldStorePostingByDate(posting?.posting_date, nowEpochSeconds())) continue;
+      hasWithin24h = true;
+      seenUrls.add(postingUrl);
+      collected.push(posting);
+    }
+
+    if (!hasWithin24h) break;
+    const totalCount = Number(responseJson?.jobPostingPreviewsCount);
     if (batch.length < pageSize) break;
     if (Number.isFinite(totalCount) && totalCount >= 0 && skip + pageSize >= totalCount) break;
   }
@@ -10001,6 +10539,1761 @@ async function collectPostingsForFreshteamCompany(company) {
   return parseFreshteamPostingsFromHtml(companyNameForPostings, parseConfig, pageHtml);
 }
 
+function parseAvatureCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  const baseOrigin = `${parsed.protocol || "https:"}//${host}`;
+  const pathLower = String(parsed.pathname || "").toLowerCase();
+  const boardUrl =
+    pathLower.includes("/careers/searchjobs") || pathLower === "/careers"
+      ? `${baseOrigin}/careers/SearchJobs`
+      : `${baseOrigin}/careers/SearchJobs`;
+  return { host, boardUrl, baseOrigin };
+}
+
+function parseAvaturePostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  const postings = [];
+  const seenUrls = new Set();
+  const linkPattern = /<a[^>]+href=["'](?<href>[^"']*\/careers\/JobDetail\/[^"']+)["'][^>]*>(?<label>.*?)<\/a>/gis;
+  const idPattern = /\/JobDetail\/[^/]+\/(?<id>\d+)(?:\?|$)/i;
+  let match = linkPattern.exec(source);
+
+  while (match) {
+    const href = cleanHtmlText(match.groups?.href || "");
+    const jobPostingUrl = urljoin(pageUrl, href);
+    if (!jobPostingUrl || seenUrls.has(jobPostingUrl)) {
+      match = linkPattern.exec(source);
+      continue;
+    }
+
+    const positionName = cleanHtmlText(match.groups?.label || "");
+    const normalizedTitle = normalizeLikeText(positionName);
+    if (!positionName || normalizedTitle === "apply" || normalizedTitle === "read more") {
+      match = linkPattern.exec(source);
+      continue;
+    }
+
+    const idMatch = idPattern.exec(jobPostingUrl);
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: positionName || "Untitled Position",
+      job_posting_url: jobPostingUrl,
+      posting_date: null,
+      location: null,
+      ats_job_id: idMatch?.groups?.id || null
+    });
+    seenUrls.add(jobPostingUrl);
+    match = linkPattern.exec(source);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForAvatureCompany(company) {
+  const config = parseAvatureCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.host.split(".")[0] || "avature";
+  const response = await fetchWithAtsRateLimit("avature", AVATURE_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache"
+    }
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Avature request failed (${response.status}): ${body.slice(0, 180)}`);
+  }
+  const pageHtml = await response.text();
+  const finalUrl = String(response.url || config.boardUrl);
+  return parseAvaturePostingsFromHtml(companyNameForPostings, pageHtml, finalUrl);
+}
+
+function parseComeetCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (!(host === "www.comeet.com" || host === "comeet.com")) return null;
+  const path = String(parsed.pathname || "");
+  if (!/\/jobs\//i.test(path)) return null;
+  const baseOrigin = `${parsed.protocol || "https:"}//${host}`;
+  const boardUrl = `${baseOrigin}${path}${parsed.search || ""}`;
+  return { host, boardUrl };
+}
+
+function extractComeetPositionsData(pageHtml) {
+  const source = String(pageHtml || "");
+  const match = /COMPANY_POSITIONS_DATA\s*=\s*(\[[\s\S]*?\])\s*;/i.exec(source);
+  if (!match) return [];
+  const rawJson = String(match[1] || "").trim();
+  if (!rawJson) return [];
+  try {
+    const parsed = JSON.parse(rawJson);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function parseComeetPostingsFromHtml(companyNameForPostings, pageHtml) {
+  const items = extractComeetPositionsData(pageHtml);
+  const postings = [];
+  const seenUrls = new Set();
+
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const postingUrl =
+      String(item.url_comeet_hosted_page || "").trim() ||
+      String(item.url_recruit_hosted_page || "").trim() ||
+      String(item.url_active_page || "").trim() ||
+      String(item.url_detected_page || "").trim();
+    if (!postingUrl || seenUrls.has(postingUrl)) continue;
+
+    let location = null;
+    if (item.location && typeof item.location === "object") {
+      location =
+        String(item.location.name || "").trim() ||
+        String(item.location.city || "").trim() ||
+        String(item.location.state || "").trim() ||
+        String(item.location.country || "").trim() ||
+        null;
+    }
+
+    postings.push({
+      company_name: companyNameForPostings || String(item.company_name || "").trim() || "comeet",
+      position_name: String(item.name || "").trim() || "Untitled Position",
+      job_posting_url: postingUrl,
+      posting_date: String(item.time_updated || "").trim() || null,
+      location
+    });
+    seenUrls.add(postingUrl);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForComeetCompany(company) {
+  const config = parseComeetCompany(company.url_string);
+  if (!config) return [];
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const response = await fetchWithAtsRateLimit("comeet", COMEET_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache"
+    }
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Comeet request failed (${response.status}): ${body.slice(0, 180)}`);
+  }
+  const pageHtml = await response.text();
+  return parseComeetPostingsFromHtml(normalizedCompanyName, pageHtml);
+}
+
+function parseFactorialhrCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (!host.endsWith(".factorialhr.com") || host === "factorialhr.com") return null;
+  const baseOrigin = `${parsed.protocol || "https:"}//${host}`;
+  return {
+    host,
+    boardUrl: `${baseOrigin}/#jobs`
+  };
+}
+
+function extractFactorialhrDateFromJobHtml(jobHtml) {
+  const source = String(jobHtml || "");
+  const patterns = [
+    /"datePosted"\s*:\s*"(?<value>[^"]+)"/i,
+    /"datePublished"\s*:\s*"(?<value>[^"]+)"/i,
+    /data-posted-at=["'](?<value>[^"']+)["']/i,
+    /posted\s*(?:on|at)?\s*[:\-]?\s*(?<value>\d{4}-\d{2}-\d{2})/i
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(source);
+    const value = String(match?.groups?.value || "").trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+function parseFactorialhrPostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  const postings = [];
+  const seenUrls = new Set();
+  const cardPattern = /<li[^>]*class=['"][^'"]*\bjob-offer-item\b[^'"]*['"][^>]*>[\s\S]*?<\/li>/gi;
+  const urlPattern = /data-job-postings-url=['"](?<url>[^'"]+)['"]/i;
+  const titlePattern = /<div[^>]*factorial__headingFontFamily[^>]*>(?<title>[\s\S]*?)<\/div>/i;
+  const locationPattern = /<div[^>]*text-gray-350[^>]*>(?<location>[\s\S]*?)<\/div>/i;
+
+  let cardMatch = cardPattern.exec(source);
+  while (cardMatch) {
+    const cardHtml = String(cardMatch[0] || "");
+    const urlMatch = urlPattern.exec(cardHtml);
+    if (!urlMatch) {
+      cardMatch = cardPattern.exec(source);
+      continue;
+    }
+
+    const rawUrl = cleanHtmlText(urlMatch.groups?.url || "");
+    const jobPostingUrl = urljoin(pageUrl, rawUrl);
+    if (!jobPostingUrl || seenUrls.has(jobPostingUrl)) {
+      cardMatch = cardPattern.exec(source);
+      continue;
+    }
+
+    const title = cleanHtmlText((titlePattern.exec(cardHtml)?.groups?.title || "").trim()) || "Untitled Position";
+    if (normalizeLikeText(title) === "open application") {
+      cardMatch = cardPattern.exec(source);
+      continue;
+    }
+    const location = cleanHtmlText(locationPattern.exec(cardHtml)?.groups?.location || "") || null;
+    const remoteFlagRaw = cleanHtmlText(/data-is-remote=['"](?<v>[^'"]+)['"]/i.exec(cardHtml)?.groups?.v || "");
+    const remoteFlag = normalizeLikeText(remoteFlagRaw);
+    const remoteLabel = remoteFlag === "true" ? "Remote" : null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: title,
+      job_posting_url: jobPostingUrl,
+      posting_date: null,
+      location: location || remoteLabel
+    });
+    seenUrls.add(jobPostingUrl);
+    cardMatch = cardPattern.exec(source);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForFactorialhrCompany(company) {
+  const config = parseFactorialhrCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.host.split(".")[0] || "factorialhr";
+
+  const boardResponse = await fetchWithAtsRateLimit("factorialhr", FACTORIALHR_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache"
+    }
+  });
+  if (!boardResponse.ok) {
+    const body = await boardResponse.text();
+    throw new Error(`FactorialHR board request failed (${boardResponse.status}): ${body.slice(0, 180)}`);
+  }
+
+  const boardHtml = await boardResponse.text();
+  const finalUrl = String(boardResponse.url || config.boardUrl).trim();
+  const postings = parseFactorialhrPostingsFromHtml(companyNameForPostings, boardHtml, finalUrl);
+
+  for (const posting of postings) {
+    const jobUrl = String(posting?.job_posting_url || "").trim();
+    if (!jobUrl) continue;
+    try {
+      const detailResponse = await fetchWithAtsRateLimit("factorialhr", FACTORIALHR_RATE_LIMIT_WAIT_MS, jobUrl, {
+        method: "GET",
+        headers: {
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache"
+        }
+      });
+      if (!detailResponse.ok) continue;
+      const detailHtml = await detailResponse.text();
+      const date = extractFactorialhrDateFromJobHtml(detailHtml);
+      if (date) posting.posting_date = date;
+    } catch (_error) {
+      // Best-effort date extraction; keep posting even if detail page parse fails.
+    }
+  }
+
+  return postings;
+}
+
+function parseHireologyCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  let host = String(parsed.host || "").toLowerCase().trim();
+  if (host.startsWith("www.")) {
+    host = host.slice(4);
+  }
+  if (!host.endsWith(".hireology.careers")) return null;
+  const companySlug = host.slice(0, -".hireology.careers".length);
+  if (!companySlug) return null;
+  return { host, companySlug };
+}
+
+function extractHireologyStartingData(pageHtml) {
+  const source = String(pageHtml || "");
+  const match = /var\s+startingData\s*=\s*(\{[\s\S]*?\})\s*;/i.exec(source);
+  if (!match) return {};
+  const raw = String(match[1] || "").trim();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch (_error) {
+    return {};
+  }
+}
+
+function buildHireologyApiUrl(companySlug, xdmC = "") {
+  const params = new URLSearchParams({
+    ref: "career_site",
+    ref_m: "application",
+    widget: "t",
+    sort: "jobs.created_at",
+    sort_dir: "desc"
+  });
+  if (xdmC) {
+    params.set("xdm_c", xdmC);
+    params.set("xdm_e", `https://${companySlug}.hireology.careers`);
+    params.set("xdm_p", "1");
+  }
+  return `https://api.hireology.com/v2/public/careers/${companySlug}?${params.toString()}`;
+}
+
+function parseHireologyPostingsFromApi(companyNameForPostings, payload) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const items = Array.isArray(source?.data) ? source.data : [];
+  const postings = [];
+  const seenIds = new Set();
+
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const postingId = String(item?.id || "").trim();
+    if (!postingId || seenIds.has(postingId)) continue;
+
+    const organization = item.organization && typeof item.organization === "object" ? item.organization : {};
+    const locations = Array.isArray(item.locations) ? item.locations : [];
+    const primaryLocation = locations[0] && typeof locations[0] === "object" ? locations[0] : {};
+    const locationParts = [
+      String(primaryLocation.city || "").trim(),
+      String(primaryLocation.state || "").trim(),
+      String(primaryLocation.zip_code || "").trim()
+    ].filter(Boolean);
+    const location = locationParts.length > 0 ? locationParts.join(", ") : null;
+
+    const postingUrl =
+      String(item.career_site_url || "").trim() ||
+      `https://careers.hireology.com/${String(item.career_site_path || "").replace(/^\/+/, "")}`;
+
+    postings.push({
+      company_name: String(organization.name || "").trim() || companyNameForPostings,
+      position_name: String(item.name || "").trim() || "Untitled Position",
+      job_posting_url: postingUrl,
+      posting_date: String(item.created_at || "").trim() || null,
+      location
+    });
+    seenIds.add(postingId);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForHireologyCompany(company) {
+  const config = parseHireologyCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.companySlug;
+
+  const boardResponse = await fetchWithAtsRateLimit("hireology", HIREOLOGY_RATE_LIMIT_WAIT_MS, company.url_string, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache"
+    }
+  });
+  if (!boardResponse.ok) {
+    const body = await boardResponse.text();
+    throw new Error(`Hireology board request failed (${boardResponse.status}): ${body.slice(0, 180)}`);
+  }
+
+  const widgetUrl = `https://careers.hireology.com/${config.companySlug}?widget=t&ref=career_site&ref_m=application`;
+  const widgetResponse = await fetchWithAtsRateLimit("hireology", HIREOLOGY_RATE_LIMIT_WAIT_MS, widgetUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache"
+    }
+  });
+  if (!widgetResponse.ok) {
+    const body = await widgetResponse.text();
+    throw new Error(`Hireology widget request failed (${widgetResponse.status}): ${body.slice(0, 180)}`);
+  }
+
+  const startingData = extractHireologyStartingData(await widgetResponse.text());
+  const xdmC = String(startingData?.xdm_c || "").trim();
+  const careersPath = String(startingData?.careersPath || "").trim() || config.companySlug;
+  const apiUrl = buildHireologyApiUrl(careersPath, xdmC);
+
+  const apiResponse = await fetchWithAtsRateLimit("hireology", HIREOLOGY_RATE_LIMIT_WAIT_MS, apiUrl, {
+    method: "GET",
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache"
+    }
+  });
+  if (!apiResponse.ok) {
+    const body = await apiResponse.text();
+    throw new Error(`Hireology API request failed (${apiResponse.status}): ${body.slice(0, 180)}`);
+  }
+
+  const payload = await apiResponse.json();
+  return parseHireologyPostingsFromApi(companyNameForPostings, payload);
+}
+
+function parseHiringplatformCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (!host.endsWith(".hiringplatform.com")) return null;
+  const boardUrl = `${parsed.protocol || "https:"}//${host}${parsed.pathname || "/"}${parsed.search || ""}`;
+  return { host, boardUrl };
+}
+
+function parseHiringplatformPostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  const postings = [];
+  const seenUrls = new Set();
+
+  const cardPattern = /<div[^>]*class=["'][^"']*\bvidcruiter-job-item\b[^"']*["'][^>]*>[\s\S]*?<\/div>\s*<\/div>/gi;
+  const applyUrlPattern = /<a[^>]*class=["'][^"']*\bvidcruiter-btn\b[^"']*["'][^>]*href=["'](?<href>[^"']+)["'][^>]*>\s*Apply\s*<\/a>/i;
+  const titlePattern = /<h2[^>]*class=["'][^"']*\bvidcruiter-job-item-title\b[^"']*["'][^>]*>[\s\S]*?<a[^>]*>(?<title>[\s\S]*?)<\/a>[\s\S]*?<\/h2>/i;
+  const locationPattern = /<p[^>]*class=["'][^"']*\bvidcruiter-job-item-description-title\b[^"']*["'][^>]*>(?<location>[\s\S]*?)<\/p>/i;
+
+  let cardMatch = cardPattern.exec(source);
+  while (cardMatch) {
+    const cardHtml = String(cardMatch[0] || "");
+    const applyMatch = applyUrlPattern.exec(cardHtml);
+    if (!applyMatch?.groups?.href) {
+      cardMatch = cardPattern.exec(source);
+      continue;
+    }
+
+    const postingUrl = urljoin(pageUrl, cleanHtmlText(applyMatch.groups.href));
+    if (!postingUrl || seenUrls.has(postingUrl) || !postingUrl.includes(".hiringplatform.com/")) {
+      cardMatch = cardPattern.exec(source);
+      continue;
+    }
+
+    const title = cleanHtmlText(titlePattern.exec(cardHtml)?.groups?.title || "") || "Untitled Position";
+    const location = cleanHtmlText(locationPattern.exec(cardHtml)?.groups?.location || "") || null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: title,
+      job_posting_url: postingUrl,
+      posting_date: null,
+      location
+    });
+    seenUrls.add(postingUrl);
+    cardMatch = cardPattern.exec(source);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForHiringplatformCompany(company) {
+  const config = parseHiringplatformCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.host.split(".")[0] || "hiringplatform";
+
+  const response = await fetchWithAtsRateLimit("hiringplatform", HIRINGPLATFORM_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache"
+    }
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`HiringPlatform request failed (${response.status}): ${body.slice(0, 180)}`);
+  }
+
+  const pageHtml = await response.text();
+  const finalUrl = String(response.url || config.boardUrl).trim();
+  return parseHiringplatformPostingsFromHtml(companyNameForPostings, pageHtml, finalUrl);
+}
+
+function parseHomerunCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (!host.endsWith(".homerun.co")) return null;
+  const boardUrl = `${parsed.protocol || "https:"}//${host}${parsed.pathname || "/"}${parsed.search || ""}`;
+  return { host, boardUrl };
+}
+
+function extractHomerunJobListPayload(pageHtml) {
+  const source = String(pageHtml || "");
+  const match = /<job-list[^>]*\bv-bind=['"](?<payload>\{[\s\S]*?\})['"]/i.exec(source);
+  if (!match?.groups?.payload) return {};
+  const raw = cleanHtmlText(match.groups.payload).replace(/&quot;/g, '"');
+  const unescaped = decodeHtml(raw).replace(/\\\//g, "/");
+  if (!unescaped) return {};
+  try {
+    const parsed = JSON.parse(unescaped);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function parseHomerunPostingsFromHtml(companyNameForPostings, pageHtml) {
+  const payload = extractHomerunJobListPayload(pageHtml);
+  const content = payload && typeof payload === "object" ? payload.content : null;
+  const vacancies = Array.isArray(content?.vacancies) ? content.vacancies : [];
+  const locations = Array.isArray(content?.locations) ? content.locations : [];
+
+  const locationById = new Map();
+  for (const location of locations) {
+    if (!location || typeof location !== "object") continue;
+    const id = Number(location.id);
+    const name = String(location.name || "").trim();
+    if (!Number.isFinite(id) || !name) continue;
+    locationById.set(id, name);
+  }
+
+  const postings = [];
+  const seenUrls = new Set();
+  for (const vacancy of vacancies) {
+    if (!vacancy || typeof vacancy !== "object") continue;
+    const postingUrl = String(vacancy.url || "").trim().replace(/\\\//g, "/");
+    if (!postingUrl || seenUrls.has(postingUrl)) continue;
+
+    const title = decodeHtml(String(vacancy.title || "").trim()) || "Untitled Position";
+    const locationId = Number(vacancy.location_id);
+    const location = Number.isFinite(locationId) ? locationById.get(locationId) || null : null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: title,
+      job_posting_url: postingUrl,
+      posting_date: null,
+      location
+    });
+    seenUrls.add(postingUrl);
+  }
+  return postings;
+}
+
+async function collectPostingsForHomerunCompany(company) {
+  const config = parseHomerunCompany(company.url_string);
+  if (!config) return [];
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.host.split(".")[0] || "homerun";
+
+  const response = await fetchWithAtsRateLimit("homerun", HOMERUN_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache"
+    }
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Homerun request failed (${response.status}): ${body.slice(0, 180)}`);
+  }
+  const pageHtml = await response.text();
+  return parseHomerunPostingsFromHtml(companyNameForPostings, pageHtml);
+}
+
+function parseJibeapplyCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (!host.endsWith(".jibeapply.com")) return null;
+  const baseOrigin = `${parsed.protocol || "https:"}//${host}`;
+  return {
+    host,
+    apiUrl: `${baseOrigin}/api/jobs`
+  };
+}
+
+function extractJibeapplyJobs(payload) {
+  if (Array.isArray(payload)) {
+    return payload.filter((item) => item && typeof item === "object");
+  }
+  if (!payload || typeof payload !== "object") return [];
+
+  for (const key of ["jobs", "results", "items", "data"]) {
+    const value = payload[key];
+    if (Array.isArray(value)) {
+      return value.filter((item) => item && typeof item === "object");
+    }
+    if (value && typeof value === "object" && Array.isArray(value.jobs)) {
+      return value.jobs.filter((item) => item && typeof item === "object");
+    }
+  }
+  return [];
+}
+
+function parseJibeapplyPostingsFromApi(companyNameForPostings, payload) {
+  const jobs = extractJibeapplyJobs(payload);
+  const postings = [];
+  const seenUrls = new Set();
+
+  for (const job of jobs) {
+    const postingUrl =
+      String(job?.url || "").trim() ||
+      String(job?.applyUrl || "").trim() ||
+      String(job?.jobUrl || "").trim() ||
+      String(job?.externalUrl || "").trim();
+    if (!postingUrl || seenUrls.has(postingUrl)) continue;
+
+    const location =
+      String(job?.location || "").trim() ||
+      String(job?.city || "").trim() ||
+      String(job?.jobLocation || "").trim() ||
+      null;
+    const postingDate =
+      String(job?.publishDate || "").trim() ||
+      String(job?.postedDate || "").trim() ||
+      String(job?.datePosted || "").trim() ||
+      null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: String(job?.title || "").trim() || String(job?.jobTitle || "").trim() || "Untitled Position",
+      job_posting_url: postingUrl,
+      posting_date: postingDate,
+      location
+    });
+    seenUrls.add(postingUrl);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForJibeapplyCompany(company) {
+  const config = parseJibeapplyCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.host.split(".")[0] || "jibeapply";
+
+  const postings = [];
+  const seenUrls = new Set();
+
+  for (let page = 1; page <= MAX_PAGES_PER_COMPANY; page += 1) {
+    const requestUrl = new URL(config.apiUrl);
+    requestUrl.searchParams.set("page", String(page));
+    requestUrl.searchParams.set("sortBy", "relevance");
+    requestUrl.searchParams.set("descending", "false");
+    requestUrl.searchParams.set("internal", "false");
+
+    const response = await fetchWithAtsRateLimit("jibeapply", JIBEAPPLY_RATE_LIMIT_WAIT_MS, requestUrl.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache"
+      }
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`JibeApply request failed (${response.status}): ${body.slice(0, 180)}`);
+    }
+
+    const payload = await response.json();
+    const batch = parseJibeapplyPostingsFromApi(companyNameForPostings, payload);
+    if (!batch.length) break;
+
+    let added = 0;
+    for (const posting of batch) {
+      const postingUrl = String(posting?.job_posting_url || "").trim();
+      if (!postingUrl || seenUrls.has(postingUrl)) continue;
+      postings.push(posting);
+      seenUrls.add(postingUrl);
+      added += 1;
+    }
+    if (!added) break;
+  }
+
+  return postings;
+}
+
+function parseJobs2webCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (!host.endsWith(".jobs2web.com")) return null;
+  const baseOrigin = `${parsed.protocol || "https:"}//${host}`;
+  return {
+    host,
+    searchUrl: `${baseOrigin}/search/`
+  };
+}
+
+function parseJobs2webPostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  const postings = [];
+  const seenUrls = new Set();
+  const rowPattern = /<tr[^>]*class=['"][^'"]*\bdata-row\b[^'"]*['"][^>]*>(?<row>[\s\S]*?)<\/tr>/gi;
+  const titlePattern = /<a[^>]*href=['"](?<href>[^'"]+)['"][^>]*class=['"][^'"]*\bjobTitle-link\b[^'"]*['"][^>]*>(?<title>[\s\S]*?)<\/a>/i;
+  const locationPattern = /<td[^>]*class=['"][^'"]*\bcolLocation\b[^'"]*['"][^>]*>(?<location>[\s\S]*?)<\/td>/i;
+  const datePattern = /<span[^>]*class=['"][^'"]*\bjobDate\b[^'"]*['"][^>]*>(?<date>[\s\S]*?)<\/span>/i;
+
+  let rowMatch = rowPattern.exec(source);
+  while (rowMatch) {
+    const rowHtml = String(rowMatch.groups?.row || "");
+    const titleMatch = titlePattern.exec(rowHtml);
+    if (!titleMatch) {
+      rowMatch = rowPattern.exec(source);
+      continue;
+    }
+
+    const postingUrl = urljoin(pageUrl, cleanHtmlText(titleMatch.groups?.href || ""));
+    if (!postingUrl || seenUrls.has(postingUrl)) {
+      rowMatch = rowPattern.exec(source);
+      continue;
+    }
+
+    const positionName = cleanHtmlText(titleMatch.groups?.title || "") || "Untitled Position";
+    const location = cleanHtmlText(locationPattern.exec(rowHtml)?.groups?.location || "") || null;
+    const postingDate = cleanHtmlText(datePattern.exec(rowHtml)?.groups?.date || "") || null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: positionName,
+      job_posting_url: postingUrl,
+      posting_date: postingDate,
+      location
+    });
+    seenUrls.add(postingUrl);
+    rowMatch = rowPattern.exec(source);
+  }
+
+  return postings;
+}
+
+function extractJobs2webNextStartrow(pageHtml) {
+  const source = String(pageHtml || "");
+  const nextLinkPattern = /<li[^>]*>\s*<a[^>]*href=["'][^"']*startrow=(?<startrow>\d+)[^"']*["'][^>]*title=["'][^"']*(?:Page\s+\d+|Next)[^"']*["'][^>]*>/gi;
+  let maxStartrow = null;
+  let match = nextLinkPattern.exec(source);
+  while (match) {
+    const startrow = Number(match.groups?.startrow);
+    if (Number.isFinite(startrow)) {
+      maxStartrow = maxStartrow === null ? startrow : Math.max(maxStartrow, startrow);
+    }
+    match = nextLinkPattern.exec(source);
+  }
+  return maxStartrow;
+}
+
+async function collectPostingsForJobs2webCompany(company) {
+  const config = parseJobs2webCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.host.split(".")[0] || "jobs2web";
+
+  const postings = [];
+  const seenUrls = new Set();
+  let startrow = 0;
+
+  for (let pageIndex = 0; pageIndex < MAX_PAGES_PER_COMPANY; pageIndex += 1) {
+    const requestUrl = new URL(config.searchUrl);
+    requestUrl.searchParams.set("q", "");
+    if (startrow > 0) {
+      requestUrl.searchParams.set("startrow", String(startrow));
+    }
+
+    const response = await fetchWithAtsRateLimit("jobs2web", JOBS2WEB_RATE_LIMIT_WAIT_MS, requestUrl.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache"
+      }
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Jobs2Web request failed (${response.status}): ${body.slice(0, 180)}`);
+    }
+
+    const pageHtml = await response.text();
+    const finalUrl = String(response.url || requestUrl.toString()).trim();
+    const batch = parseJobs2webPostingsFromHtml(companyNameForPostings, pageHtml, finalUrl);
+    if (!batch.length) break;
+
+    let added = 0;
+    for (const posting of batch) {
+      const postingUrl = String(posting?.job_posting_url || "").trim();
+      if (!postingUrl || seenUrls.has(postingUrl)) continue;
+      seenUrls.add(postingUrl);
+      postings.push(posting);
+      added += 1;
+    }
+    if (!added) break;
+
+    const nextStartrow = extractJobs2webNextStartrow(pageHtml);
+    if (!Number.isFinite(nextStartrow) || nextStartrow <= startrow) break;
+    startrow = nextStartrow;
+  }
+
+  return postings;
+}
+
+function parseOccupopCompany(url) {
+  const normalizedUrl = sanitizeUrl(url);
+  if (!normalizedUrl) return null;
+  let parsed;
+  try {
+    parsed = new URL(normalizedUrl);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (!host.endsWith(".occupop-careers.com")) return null;
+  let companyKey = host.split(".", 1)[0] || "";
+  if (companyKey.startsWith("contextmenu-")) {
+    companyKey = companyKey.slice("contextmenu-".length);
+  }
+  if (companyKey.startsWith("3a")) {
+    companyKey = companyKey.slice(2);
+  }
+  companyKey = companyKey.replace(/^-+|-+$/g, "");
+  if (!companyKey) return null;
+  return {
+    normalizedUrl,
+    host,
+    companyKey
+  };
+}
+
+async function fetchOccupopLiveJobs(companyKey) {
+  const query =
+    "query LiveJobs($companyKey: String!, $tags: [String!], $includeAllBrandsJobs: Boolean) {\n" +
+    "  careersPage {\n" +
+    "    liveJobs(\n" +
+    "      companyKey: $companyKey\n" +
+    "      tags: $tags\n" +
+    "      includeAllBrandsJobs: $includeAllBrandsJobs\n" +
+    "    ) {\n" +
+    "      __typename\n" +
+    "      uuid\n" +
+    "      title\n" +
+    "      publishedAt\n" +
+    "      companyName\n" +
+    "      location {\n" +
+    "        city\n" +
+    "        country\n" +
+    "        __typename\n" +
+    "      }\n" +
+    "      period\n" +
+    "    }\n" +
+    "    __typename\n" +
+    "  }\n" +
+    "}";
+
+  const body = {
+    operationName: "LiveJobs",
+    variables: {
+      companyKey,
+      tags: []
+    },
+    query
+  };
+
+  const res = await fetchWithAtsRateLimit(
+    "occupop",
+    OCCUPOP_RATE_LIMIT_WAIT_MS,
+    "https://gateway.server.occupop.com/graphql",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": DEFAULT_WEB_USER_AGENT,
+        Origin: "https://www.occupop.com",
+        Referer: "https://www.occupop.com/"
+      },
+      body: JSON.stringify(body)
+    }
+  );
+  if (!res.ok) return [];
+  let payload;
+  try {
+    payload = await res.json();
+  } catch {
+    return [];
+  }
+  const liveJobs = payload?.data?.careersPage?.liveJobs;
+  return Array.isArray(liveJobs) ? liveJobs : [];
+}
+
+async function collectPostingsForOccupopCompany(company) {
+  const config = parseOccupopCompany(company.url_string);
+  if (!config) return [];
+
+  const jobs = await fetchOccupopLiveJobs(config.companyKey);
+  const results = [];
+  const seen = new Set();
+  for (const job of jobs) {
+    const id = toCleanString(job?.uuid);
+    if (!id) continue;
+    const jobPostingUrl = `https://${config.host}/job/${id}`;
+    if (!jobPostingUrl || seen.has(jobPostingUrl)) continue;
+    const city = toCleanString(job?.location?.city);
+    const country = toCleanString(job?.location?.country);
+    const locationParts = [city, country].filter(Boolean);
+    const location = locationParts.length > 0 ? locationParts.join(", ") : "";
+    results.push({
+      company_name: toCleanString(job?.companyName) || toCleanString(company.company_name) || config.companyKey,
+      position_name: toCleanString(job?.title) || "Untitled Position",
+      location,
+      posting_date: toCleanString(job?.publishedAt),
+      job_posting_url: jobPostingUrl
+    });
+    seen.add(jobPostingUrl);
+  }
+  return results;
+}
+
+function parsePeopleadminCompany(url) {
+  const normalizedUrl = sanitizeUrl(url);
+  if (!normalizedUrl) return null;
+  let parsed;
+  try {
+    parsed = new URL(normalizedUrl);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (!host.includes("peopleadmin.com")) return null;
+  const boardUrl = `${parsed.protocol}//${parsed.host}/postings/search`;
+  return {
+    normalizedUrl,
+    host,
+    boardUrl
+  };
+}
+
+function parsePeopleadminPostingsFromHtml(pageHtml, pageUrl) {
+  const html = String(pageHtml || "");
+  if (!html) return { postings: [], nextPageUrl: null };
+  const postings = [];
+  const seenUrls = new Set();
+
+  const itemRegex =
+    /<div[^>]*class=['"][^'"]*\bjob-item-posting\b[^'"]*['"][^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
+  const hrefRegex = /<h3[^>]*>[\s\S]*?<a[^>]*href=['"]([^'"]*\/postings\/\d+)['"][^>]*>([\s\S]*?)<\/a>/i;
+  const locationRegex = /<div[^>]*class=['"][^'"]*\btbody-cell\b[^'"]*['"][^>]*>([\s\S]*?)<\/div>/i;
+
+  let itemMatch;
+  while ((itemMatch = itemRegex.exec(html)) !== null) {
+    const block = String(itemMatch[1] || "");
+    const hrefMatch = block.match(hrefRegex);
+    if (!hrefMatch) continue;
+    const postingUrl = toAbsoluteUrl(pageUrl, decodeHtmlEntities(hrefMatch[1]));
+    if (!postingUrl || seenUrls.has(postingUrl)) continue;
+    const title = stripHtml(hrefMatch[2]) || "Untitled Position";
+    const locationMatch = block.match(locationRegex);
+    const location = locationMatch ? stripHtml(locationMatch[1]) : "";
+    postings.push({
+      position_name: title,
+      job_posting_url: postingUrl,
+      location
+    });
+    seenUrls.add(postingUrl);
+  }
+
+  const nextMatch = html.match(
+    /<a[^>]*class=['"][^'"]*\bnext_page\b[^'"]*['"][^>]*href=['"]([^'"]+)['"]/i
+  );
+  const nextPageUrl = nextMatch ? toAbsoluteUrl(pageUrl, decodeHtmlEntities(nextMatch[1])) : null;
+  return { postings, nextPageUrl };
+}
+
+async function fetchPeopleadminPostingDate(postingUrl) {
+  const res = await fetchWithAtsRateLimit("peopleadmin", PEOPLEADMIN_RATE_LIMIT_WAIT_MS, postingUrl, {
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!res.ok) return "";
+  const detailHtml = await res.text();
+  const text = String(detailHtml || "");
+  const patterns = [
+    /Posted\s+Date[\s\S]{0,200}?<[^>]*>([^<]+)</i,
+    /Open\s+Date[\s\S]{0,200}?<[^>]*>([^<]+)</i,
+    /Published\s+Date[\s\S]{0,200}?<[^>]*>([^<]+)</i
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      const value = stripHtml(match[1]);
+      if (value) return value;
+    }
+  }
+  return "";
+}
+
+async function collectPostingsForPeopleadminCompany(company) {
+  const config = parsePeopleadminCompany(company.url_string);
+  if (!config) return [];
+
+  const aggregated = [];
+  const seen = new Set();
+  let pageUrl = config.boardUrl;
+
+  for (let page = 0; page < MAX_PAGES_PER_COMPANY; page += 1) {
+    const res = await fetchWithAtsRateLimit("peopleadmin", PEOPLEADMIN_RATE_LIMIT_WAIT_MS, pageUrl, {
+      headers: DEFAULT_HTML_HEADERS
+    });
+    if (!res.ok) break;
+    const pageHtml = await res.text();
+    const { postings, nextPageUrl } = parsePeopleadminPostingsFromHtml(pageHtml, pageUrl);
+    if (!Array.isArray(postings) || postings.length === 0) break;
+    let pageAdded = 0;
+    for (const posting of postings) {
+      const url = toCleanString(posting.job_posting_url);
+      if (!url || seen.has(url)) continue;
+      const postingDate = await fetchPeopleadminPostingDate(url);
+      aggregated.push({
+        company_name: toCleanString(company.company_name) || extractCompanyNameFromUrlString(config.host) || config.host,
+        position_name: toCleanString(posting.position_name) || "Untitled Position",
+        location: toCleanString(posting.location),
+        posting_date: toCleanString(postingDate),
+        job_posting_url: url
+      });
+      seen.add(url);
+      pageAdded += 1;
+    }
+    if (!nextPageUrl || pageAdded === 0) break;
+    pageUrl = nextPageUrl;
+  }
+
+  return aggregated;
+}
+
+function parsePersonioCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (!host.endsWith(".jobs.personio.com") || host === "jobs.personio.com") return null;
+  const boardUrl = `${parsed.protocol || "https:"}//${host}/`;
+  return { host, boardUrl };
+}
+
+function parsePersonioPostingsFromHtml(html, pageUrl) {
+  if (!html) return [];
+  const postings = [];
+  const seenUrls = new Set();
+  const itemRegex =
+    /<a[^>]*class=['"][^'"]*\bjob-box\b[^'"]*['"][^>]*href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>/gi;
+  const titleRegex = /<h3[^>]*class=['"][^'"]*\bjb-title\b[^'"]*['"][^>]*>([\s\S]*?)<\/h3>/i;
+  const metaRegex =
+    /<span[^>]*class=['"][^'"]*page_jobMetaText[^'"]*['"][^>]*>([\s\S]*?)<\/span>/gi;
+
+  let itemMatch;
+  while ((itemMatch = itemRegex.exec(html)) !== null) {
+    const postingUrl = toAbsoluteUrl(pageUrl, decodeHtmlEntities(itemMatch[1]));
+    if (!postingUrl || seenUrls.has(postingUrl)) continue;
+    const block = String(itemMatch[2] || "");
+    const titleMatch = block.match(titleRegex);
+    const title = titleMatch ? stripHtml(titleMatch[1]) : "Untitled Position";
+
+    const metas = [];
+    let metaMatch;
+    while ((metaMatch = metaRegex.exec(block)) !== null) {
+      const value = stripHtml(metaMatch[1]);
+      if (value) metas.push(value);
+    }
+    metaRegex.lastIndex = 0;
+
+    postings.push({
+      position_name: title || "Untitled Position",
+      job_posting_url: postingUrl,
+      location: metas.length > 0 ? metas[0] : ""
+    });
+    seenUrls.add(postingUrl);
+  }
+
+  return postings;
+}
+
+async function fetchPersonioPostingDate(postingUrl) {
+  const res = await fetchWithAtsRateLimit("personio", PERSONIO_RATE_LIMIT_WAIT_MS, postingUrl, {
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!res.ok) return "";
+  const detailHtml = await res.text();
+  const source = String(detailHtml || "");
+  const patterns = [
+    /"datePosted"\s*:\s*"([^"]+)"/i,
+    /"datePublished"\s*:\s*"([^"]+)"/i,
+    /datePosted["']?\s*[:=]\s*["']([^"']+)["']/i
+  ];
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match && match[1]) {
+      const value = toCleanString(match[1]);
+      if (value) return value;
+    }
+  }
+  return "";
+}
+
+async function collectPostingsForPersonioCompany(company) {
+  const config = parsePersonioCompany(company.url_string);
+  if (!config) return [];
+
+  const companyNameForPostings =
+    toCleanString(company.company_name) || extractCompanyNameFromUrlString(config.host) || config.host;
+  const res = await fetchWithAtsRateLimit("personio", PERSONIO_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!res.ok) return [];
+  const pageHtml = await res.text();
+  const rawPostings = parsePersonioPostingsFromHtml(pageHtml, config.boardUrl);
+
+  const aggregated = [];
+  const seen = new Set();
+  for (const posting of rawPostings) {
+    const postingUrl = toCleanString(posting.job_posting_url);
+    if (!postingUrl || seen.has(postingUrl)) continue;
+    const postingDate = await fetchPersonioPostingDate(postingUrl);
+    aggregated.push({
+      company_name: companyNameForPostings,
+      position_name: toCleanString(posting.position_name) || "Untitled Position",
+      location: toCleanString(posting.location),
+      posting_date: toCleanString(postingDate),
+      job_posting_url: postingUrl
+    });
+    seen.add(postingUrl);
+  }
+  return aggregated;
+}
+
+function parseRecruiterflowCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (host !== "recruiterflow.com" && host !== "www.recruiterflow.com") return null;
+
+  const pathParts = String(parsed.pathname || "")
+    .split("/")
+    .filter(Boolean);
+  if (pathParts.length < 1) return null;
+  const companySlug = pathParts[0];
+  const protocol = parsed.protocol || "https:";
+  const boardUrl = `${protocol}//${host}/${companySlug}/jobs`;
+  return { host, boardUrl, companySlug };
+}
+
+function extractRecruiterflowJobsListObject(pageHtml) {
+  const source = String(pageHtml || "");
+  const marker = source.match(/window\.jobsList\s*=/i);
+  if (!marker || marker.index === undefined) return null;
+  const start = marker.index + marker[0].length;
+
+  let depth = 0;
+  let inString = false;
+  let stringQuote = "";
+  let escaped = false;
+  let begin = -1;
+  for (let idx = start; idx < source.length; idx += 1) {
+    const ch = source[idx];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === stringQuote) {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      inString = true;
+      stringQuote = ch;
+      continue;
+    }
+    if (ch === "{") {
+      if (begin === -1) begin = idx;
+      depth += 1;
+      continue;
+    }
+    if (ch === "}") {
+      depth -= 1;
+      if (depth === 0 && begin !== -1) {
+        const objectText = source.slice(begin, idx + 1);
+        try {
+          return JSON.parse(objectText);
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function parseRecruiterflowPostingsFromHtml(companyNameForPostings, pageHtml) {
+  const jobsList = extractRecruiterflowJobsListObject(pageHtml);
+  if (!jobsList || typeof jobsList !== "object") return [];
+  const departmentRows = Array.isArray(jobsList.department) ? jobsList.department : [];
+
+  const postings = [];
+  const seenUrls = new Set();
+  for (const group of departmentRows) {
+    if (!Array.isArray(group) || group.length < 2) continue;
+    const departmentName = toCleanString(group[0]);
+    const jobs = Array.isArray(group[1]) ? group[1] : [];
+    for (const job of jobs) {
+      if (!job || typeof job !== "object") continue;
+      const applyLink = toCleanString(job.apply_link);
+      if (!applyLink) continue;
+      const postingUrl = toAbsoluteUrl("https://recruiterflow.com/", applyLink);
+      if (!postingUrl || seenUrls.has(postingUrl)) continue;
+
+      postings.push({
+        company_name: companyNameForPostings,
+        position_name: toCleanString(job.job_name) || "Untitled Position",
+        job_posting_url: postingUrl,
+        posting_date: toCleanString(job.last_opened) || null,
+        location: toCleanString(job.details) || null,
+        employment_type: toCleanString(job.employment_type) || null,
+        remote_type: toCleanString(job.remote_type) || null,
+        department: departmentName || null
+      });
+      seenUrls.add(postingUrl);
+    }
+  }
+  return postings;
+}
+
+async function collectPostingsForRecruiterflowCompany(company) {
+  const config = parseRecruiterflowCompany(company.url_string);
+  if (!config) return [];
+  const companyNameForPostings =
+    toCleanString(company.company_name) || extractCompanyNameFromUrlString(config.companySlug) || config.companySlug;
+
+  const res = await fetchWithAtsRateLimit("recruiterflow", RECRUITERFLOW_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!res.ok) return [];
+  const pageHtml = await res.text();
+  return parseRecruiterflowPostingsFromHtml(companyNameForPostings, pageHtml);
+}
+
+function parseSoftgardenCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (!host.endsWith(".softgarden.io")) return null;
+  const boardUrl = `${parsed.protocol || "https:"}//${host}/vacancies`;
+  return { host, boardUrl };
+}
+
+function parseSoftgardenPostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  if (!source) return [];
+
+  const postings = [];
+  const seenUrls = new Set();
+  const blockPattern =
+    /<div class="matchElement"\s+id="job_id_(?<jobId>\d+)">(?<block>[\s\S]*?)<\/div>\s*(?=<div class="matchElement"|<\/div>\s*<\/div>|$)/gi;
+  const hrefPattern = /<a[^>]*href="(?<href>[^"]+)"[^>]*>(?<title>[\s\S]*?)<\/a>/i;
+  const datePattern = /<div class="matchValue date">(?<date>[\s\S]*?)<\/div>/i;
+  const locationPattern = /<div class="matchValue ProjectGeoLocationCity">(?<location>[\s\S]*?)<\/div>/i;
+
+  let match = blockPattern.exec(source);
+  while (match) {
+    const block = String(match.groups?.block || "");
+    const hrefMatch = hrefPattern.exec(block);
+    if (!hrefMatch) {
+      match = blockPattern.exec(source);
+      continue;
+    }
+
+    const postingUrl = toAbsoluteUrl(pageUrl, decodeHtmlEntities(String(hrefMatch.groups?.href || "")));
+    if (!postingUrl || seenUrls.has(postingUrl)) {
+      match = blockPattern.exec(source);
+      continue;
+    }
+
+    const title = stripHtml(hrefMatch.groups?.title || "") || "Untitled Position";
+    const postingDate = stripHtml(datePattern.exec(block)?.groups?.date || "") || null;
+    const location = stripHtml(locationPattern.exec(block)?.groups?.location || "") || null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: title,
+      job_posting_url: postingUrl,
+      posting_date: postingDate,
+      location
+    });
+    seenUrls.add(postingUrl);
+    match = blockPattern.exec(source);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForSoftgardenCompany(company) {
+  const config = parseSoftgardenCompany(company.url_string);
+  if (!config) return [];
+
+  const companyNameForPostings =
+    toCleanString(company.company_name) || extractCompanyNameFromUrlString(config.host) || config.host;
+  const res = await fetchWithAtsRateLimit("softgarden", SOFTGARDEN_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!res.ok) return [];
+  const pageHtml = await res.text();
+  const finalUrl = String(res.url || config.boardUrl).trim();
+  return parseSoftgardenPostingsFromHtml(companyNameForPostings, pageHtml, finalUrl);
+}
+
+function parseTrakstarCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  const isValidHost =
+    host.endsWith(".hire.trakstar.com") ||
+    host.endsWith(".recruiterbox.com") ||
+    host.endsWith(".trakstarhire.com");
+  if (!isValidHost) return null;
+  const boardUrl = `${parsed.protocol || "https:"}//${host}${parsed.pathname || "/"}`;
+  return { host, boardUrl };
+}
+
+function parseTrakstarPostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  if (!source) return [];
+
+  const postings = [];
+  const seenUrls = new Set();
+  const blockPattern =
+    /<div[^>]*class="[^"]*\bjs-careers-page-job-list-item\b[^"]*"[^>]*>(?<block>[\s\S]*?)<\/div>\s*<\/div>/gi;
+  const hrefPattern = /<a[^>]*href="(?<href>\/jobs\/[^"]+\/?)"[^>]*>/i;
+  const titlePattern =
+    /<h3[^>]*class="[^"]*\bjs-job-list-opening-name\b[^"]*"[^>]*>(?<title>[\s\S]*?)<\/h3>/i;
+  const locationPattern =
+    /<div[^>]*class="[^"]*\bjs-job-list-opening-loc\b[^"]*"[^>]*>(?<location>[\s\S]*?)<\/div>/i;
+  const metaPattern =
+    /<div[^>]*class="[^"]*\bjs-job-list-opening-meta\b[^"]*"[^>]*>(?<meta>[\s\S]*?)<\/div>/i;
+
+  let match = blockPattern.exec(source);
+  while (match) {
+    const block = String(match.groups?.block || "");
+    const hrefMatch = hrefPattern.exec(block);
+    if (!hrefMatch) {
+      match = blockPattern.exec(source);
+      continue;
+    }
+
+    const postingUrl = toAbsoluteUrl(pageUrl, decodeHtmlEntities(String(hrefMatch.groups?.href || "")));
+    if (!postingUrl || seenUrls.has(postingUrl)) {
+      match = blockPattern.exec(source);
+      continue;
+    }
+
+    const title = stripHtml(titlePattern.exec(block)?.groups?.title || "") || "Untitled Position";
+    const location = stripHtml(locationPattern.exec(block)?.groups?.location || "") || null;
+    const postingDate = stripHtml(metaPattern.exec(block)?.groups?.meta || "") || null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: title,
+      job_posting_url: postingUrl,
+      posting_date: postingDate,
+      location
+    });
+    seenUrls.add(postingUrl);
+    match = blockPattern.exec(source);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForTrakstarCompany(company) {
+  const config = parseTrakstarCompany(company.url_string);
+  if (!config) return [];
+
+  const companyNameForPostings =
+    toCleanString(company.company_name) || extractCompanyNameFromUrlString(config.host) || config.host;
+
+  const res = await fetchWithAtsRateLimit("trakstar", TRAKSTAR_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!res.ok) return [];
+  const pageHtml = await res.text();
+  const lower = String(pageHtml || "").toLowerCase();
+  if (lower.includes("inactive account.") || lower.includes("recruiterbox.com/inactive-ats")) {
+    return [];
+  }
+  const finalUrl = String(res.url || config.boardUrl).trim();
+  return parseTrakstarPostingsFromHtml(companyNameForPostings, pageHtml, finalUrl);
+}
+
+function parseYcombinatorCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (host !== "www.ycombinator.com" && host !== "ycombinator.com") return null;
+  const parts = String(parsed.pathname || "")
+    .split("/")
+    .filter(Boolean);
+  if (parts.length < 3 || parts[0] !== "companies" || parts[2] !== "jobs") return null;
+  const slug = String(parts[1] || "").trim();
+  if (!slug) return null;
+  const boardUrl = `${parsed.protocol || "https:"}//${host}/companies/${slug}/jobs`;
+  return { host, slug, boardUrl };
+}
+
+function parseYcombinatorPostingsFromHtml(companyNameForPostings, pageHtml) {
+  const source = String(pageHtml || "");
+  const componentMatch = source.match(
+    /<div[^>]*id="WaasShowJobsPage-react-component-[^"]+"[^>]*data-page="(?<data>[\s\S]*?)"/i
+  );
+  const rawPayload = String(componentMatch?.groups?.data || "").trim();
+  if (!rawPayload) return [];
+
+  let parsedPayload = null;
+  try {
+    parsedPayload = JSON.parse(decodeHtmlEntities(rawPayload));
+  } catch {
+    return [];
+  }
+
+  const props = parsedPayload && typeof parsedPayload === "object" ? parsedPayload.props || {} : {};
+  const companyObj = props && typeof props === "object" ? props.company || {} : {};
+  const effectiveCompanyName =
+    toCleanString(companyObj?.name) || toCleanString(companyNameForPostings) || "Unknown Company";
+  const jobs = Array.isArray(props?.jobPostings) ? props.jobPostings : [];
+  const postings = [];
+  const seenUrls = new Set();
+
+  for (const item of jobs) {
+    if (!item || typeof item !== "object") continue;
+    const jobUrl = toCleanString(item.url) || toCleanString(item.applyUrl);
+    if (!jobUrl || seenUrls.has(jobUrl)) continue;
+    postings.push({
+      company_name: effectiveCompanyName,
+      position_name: toCleanString(item.title) || "Untitled Position",
+      job_posting_url: jobUrl,
+      posting_date: toCleanString(item.createdAt) || null,
+      location: toCleanString(item.location) || null
+    });
+    seenUrls.add(jobUrl);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForYcombinatorCompany(company) {
+  const config = parseYcombinatorCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = toCleanString(company?.company_name);
+  const companyNameForPostings = normalizedCompanyName || config.slug || "ycombinator";
+  const res = await fetchWithAtsRateLimit("ycombinator", 60 * 1000, config.boardUrl, {
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!res.ok) return [];
+  const pageHtml = await res.text();
+  return parseYcombinatorPostingsFromHtml(companyNameForPostings, pageHtml);
+}
+
+function parseYelloCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  let host = String(parsed.host || "").toLowerCase();
+  if (host.startsWith("contextmenu-")) {
+    host = host.slice("contextmenu-".length);
+  }
+  if (!host.endsWith(".yello.co")) return null;
+
+  const parts = String(parsed.pathname || "")
+    .split("/")
+    .filter(Boolean);
+  if (parts.length < 2 || parts[0] !== "job_boards") return null;
+  const boardId = String(parts[1] || "").trim();
+  if (!boardId) return null;
+  const boardUrl = `${parsed.protocol || "https:"}//${host}/job_boards/${boardId}`;
+  return { host, boardId, boardUrl };
+}
+
+function parseYelloPostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  if (!source) return [];
+
+  const postings = [];
+  const seenUrls = new Set();
+  const itemPattern = /<li[^>]*class="[^"]*\bsearch-results__item\b[^"]*"[^>]*>(?<item>[\s\S]*?)<\/li>/gi;
+  const linkPattern =
+    /<a[^>]*class="[^"]*\bsearch-results__req_title\b[^"]*"[^>]*href="(?<href>[^"]+)"[^>]*>(?<title>[\s\S]*?)<\/a>/i;
+  const postedPattern =
+    /<div[^>]*class="[^"]*\bsearch-results__post-time\b[^"]*"[^>]*>(?<posted>[\s\S]*?)<\/div>/i;
+  const locationPattern =
+    /<span[^>]*class="[^"]*\bsearch-results__location\b[^"]*"[^>]*>(?<location>[\s\S]*?)<\/span>/i;
+
+  let match = itemPattern.exec(source);
+  while (match) {
+    const itemHtml = String(match.groups?.item || "");
+    const linkMatch = linkPattern.exec(itemHtml);
+    if (!linkMatch) {
+      match = itemPattern.exec(source);
+      continue;
+    }
+
+    const href = decodeHtmlEntities(String(linkMatch.groups?.href || ""));
+    const postingUrl = toAbsoluteUrl(pageUrl, href);
+    if (!postingUrl || seenUrls.has(postingUrl)) {
+      match = itemPattern.exec(source);
+      continue;
+    }
+
+    const title = stripHtml(linkMatch.groups?.title || "") || "Untitled Position";
+    const postingDate = stripHtml(postedPattern.exec(itemHtml)?.groups?.posted || "") || null;
+    const location = stripHtml(locationPattern.exec(itemHtml)?.groups?.location || "") || null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: title,
+      job_posting_url: postingUrl,
+      posting_date: postingDate,
+      location
+    });
+    seenUrls.add(postingUrl);
+    match = itemPattern.exec(source);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForYelloCompany(company) {
+  const config = parseYelloCompany(company.url_string);
+  if (!config) return [];
+  const invalidBoardIds = new Set(["inactive", "er", "job_alerts"]);
+  if (invalidBoardIds.has(config.boardId.toLowerCase())) return [];
+
+  const res = await fetchWithAtsRateLimit("yello", 60 * 1000, config.boardUrl, {
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!res.ok) return [];
+  const pageHtml = await res.text();
+  const lower = String(pageHtml || "").toLowerCase();
+  if (lower.includes("inactive account") || lower.includes("page not found")) {
+    return [];
+  }
+
+  const titleMatch = /<title>(?<title>[\s\S]*?)<\/title>/i.exec(pageHtml);
+  const titleText = decodeHtmlEntities(String(titleMatch?.groups?.title || ""));
+  const companyFromTitle = toCleanString(titleText.split("|", 1)[0] || "");
+  const companyNameForPostings =
+    companyFromTitle || toCleanString(company?.company_name) || extractCompanyNameFromUrlString(config.host) || config.host;
+
+  const finalUrl = String(res.url || config.boardUrl).trim();
+  return parseYelloPostingsFromHtml(companyNameForPostings, pageHtml, finalUrl);
+}
+
+function parseCrelateCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (host !== "jobs.crelate.com") return null;
+  const boardUrl = `${parsed.protocol || "https:"}//${host}${parsed.pathname || ""}${parsed.search || ""}`;
+  return { host, boardUrl };
+}
+
+function extractCrelateOrgIdFromHtml(pageHtml) {
+  const source = String(pageHtml || "");
+  const match = /var\s+ORG_ID\s*=\s*["'](?<orgId>[0-9a-fA-F-]{8,})["']\s*;/i.exec(source);
+  const orgId = String(match?.groups?.orgId || "").trim();
+  return orgId || null;
+}
+
+function parseCrelatePostingsFromApi(companyNameForPostings, payload) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const jobs = Array.isArray(source?.Jobs) ? source.Jobs : [];
+  const postings = [];
+  const seenUrls = new Set();
+
+  for (const item of jobs) {
+    if (!item || typeof item !== "object") continue;
+    const relativeUrl = String(item?.Url || "").trim();
+    const jobPostingUrl = relativeUrl.startsWith("/")
+      ? `https://jobs.crelate.com/portal/job${relativeUrl}`
+      : relativeUrl;
+    if (!jobPostingUrl || seenUrls.has(jobPostingUrl)) continue;
+
+    const locationParts = [item?.City, item?.State, item?.Country]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+    const location = locationParts.length > 0 ? locationParts.join(", ") : null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: String(item?.Title || "").trim() || "Untitled Position",
+      job_posting_url: jobPostingUrl,
+      posting_date: String(item?.LastPostedOnDate || "").trim() || null,
+      location
+    });
+    seenUrls.add(jobPostingUrl);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForCrelateCompany(company) {
+  const config = parseCrelateCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || "crelate";
+  const defaultHeaders = {
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache"
+  };
+
+  await waitForAtsFixedInterval("crelate", CRELATE_MIN_INTERVAL_MS);
+  const boardResponse = await fetchWithAtsRateLimit("crelate", CRELATE_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    method: "GET",
+    headers: {
+      ...defaultHeaders,
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    }
+  });
+  if (!boardResponse.ok) {
+    const body = await boardResponse.text();
+    throw new Error(`Crelate board request failed (${boardResponse.status}): ${body.slice(0, 180)}`);
+  }
+  const boardHtml = await boardResponse.text();
+  const orgId = extractCrelateOrgIdFromHtml(boardHtml);
+  if (!orgId) return [];
+
+  const apiUrl = new URL("https://jobs.crelate.com/api/candidateportal/GetAllJobs");
+  apiUrl.searchParams.set(
+    "requestEnvelope",
+    JSON.stringify(
+      {
+        Locations: null,
+        OrganizationId: orgId,
+        SearchText: null,
+        Tags: null
+      },
+      null,
+      0
+    )
+  );
+
+  await waitForAtsFixedInterval("crelate", CRELATE_MIN_INTERVAL_MS);
+  const apiResponse = await fetchWithAtsRateLimit("crelate", CRELATE_RATE_LIMIT_WAIT_MS, apiUrl.toString(), {
+    method: "GET",
+    headers: {
+      ...defaultHeaders,
+      Accept: "application/json, text/plain, */*"
+    }
+  });
+  if (!apiResponse.ok) {
+    const body = await apiResponse.text();
+    throw new Error(`Crelate API request failed (${apiResponse.status}): ${body.slice(0, 180)}`);
+  }
+
+  const payload = await apiResponse.json();
+  return parseCrelatePostingsFromApi(companyNameForPostings, payload);
+}
+
+function parseAgilehrCompany(url) {
+  const parsed = parseUrl(url);
+  if (!parsed?.host) return null;
+  const host = String(parsed.host || "").toLowerCase();
+  if (!host.endsWith(".agilehr.com") || host === "agilehr.com") return null;
+  const baseOrigin = `${parsed.protocol || "https:"}//${host}`;
+  return {
+    host,
+    apiUrl: `${baseOrigin}/public/api/careerportal/getall?sourceId=0`
+  };
+}
+
+function parseAgilehrPostingsFromApi(companyNameForPostings, payload) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const resultList = Array.isArray(source?.ResultList) ? source.ResultList : null;
+  let items = [];
+  if (resultList) {
+    items = resultList.filter((item) => item && typeof item === "object");
+  } else if (source?.Result && typeof source.Result === "object" && !Array.isArray(source.Result)) {
+    items = [source.Result];
+  } else if (Array.isArray(source?.Result)) {
+    items = source.Result.filter((item) => item && typeof item === "object");
+  }
+
+  const postings = [];
+  const seenUrls = new Set();
+  for (const item of items) {
+    const postingUrl = String(item?.ApplyUrl || "").trim();
+    if (!postingUrl || seenUrls.has(postingUrl)) continue;
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: String(item?.Title || "").trim() || "Untitled Position",
+      job_posting_url: postingUrl,
+      posting_date: String(item?.OpenDate || "").trim() || null,
+      location: String(item?.Location || item?.City || "").trim() || null
+    });
+    seenUrls.add(postingUrl);
+  }
+  return postings;
+}
+
+async function collectPostingsForAgilehrCompany(company) {
+  const config = parseAgilehrCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.host.split(".")[0] || "agilehr";
+
+  const res = await fetchWithAtsRateLimit("agilehr", 60 * 1000, config.apiUrl, {
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "en-US,en;q=0.9"
+    }
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`AgileHR request failed (${res.status}): ${body.slice(0, 180)}`);
+  }
+  const payload = await res.json();
+  return parseAgilehrPostingsFromApi(companyNameForPostings, payload);
+}
+
 async function collectPostingsForSagehrCompany(company) {
   const config = parseSagehrCompany(company.url_string);
   if (!config) return [];
@@ -10376,6 +12669,44 @@ async function collectPostingsForUltiProCompany(company) {
 
   for (let page = 0; page < MAX_PAGES_PER_COMPANY; page += 1) {
     const response = await fetchUltiProSearchResults(config, ULTIPRO_PAGE_SIZE, skip);
+    const opportunities = Array.isArray(response?.opportunities) ? response.opportunities : [];
+    if (opportunities.length === 0) break;
+
+    for (const opportunity of opportunities) {
+      const opportunityId = String(opportunity?.Id || "").trim();
+      if (!opportunityId || seenIds.has(opportunityId)) continue;
+
+      postings.push({
+        company_name: companyNameForPostings,
+        position_name: String(opportunity?.Title || "").trim() || "Untitled Position",
+        job_posting_url: `${config.baseBoardUrl}/OpportunityDetail?opportunityId=${encodeURIComponent(opportunityId)}`,
+        posting_date: String(opportunity?.PostedDate || "").trim() || null,
+        location: extractUltiProLocationName(opportunity)
+      });
+      seenIds.add(opportunityId);
+    }
+
+    const totalCount = Number(response?.totalCount);
+    if (opportunities.length < ULTIPRO_PAGE_SIZE) break;
+    if (Number.isFinite(totalCount) && skip + ULTIPRO_PAGE_SIZE >= totalCount) break;
+    skip += ULTIPRO_PAGE_SIZE;
+  }
+
+  return postings;
+}
+
+async function collectPostingsForUkgCompany(company) {
+  const config = parseUkgCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.companyIdLower;
+  const postings = [];
+  const seenIds = new Set();
+  let skip = 0;
+
+  for (let page = 0; page < MAX_PAGES_PER_COMPANY; page += 1) {
+    const response = await fetchUkgSearchResults(config, ULTIPRO_PAGE_SIZE, skip);
     const opportunities = Array.isArray(response?.opportunities) ? response.opportunities : [];
     if (opportunities.length === 0) break;
 
@@ -11103,6 +13434,227 @@ async function collectPostingsForSchoolspringDynamic(pageSize = 25) {
   return postings;
 }
 
+function parseEdjoinPostingDate(value) {
+  const source = toCleanString(value);
+  const match = /\/Date\((?<ms>-?\d+)\)\//i.exec(source);
+  const millis = Number.parseInt(String(match?.groups?.ms || ""), 10);
+  if (!Number.isFinite(millis)) return null;
+  const iso = new Date(millis).toISOString();
+  return iso || null;
+}
+
+function parseEdjoinPostingsFromPayload(payload) {
+  const data = Array.isArray(payload?.data) ? payload.data : [];
+  const postings = [];
+  const seenUrls = new Set();
+
+  for (const item of data) {
+    if (!item || typeof item !== "object") continue;
+    const postingId = toCleanString(item?.postingID);
+    if (!postingId) continue;
+    const jobPostingUrl = `https://www.edjoin.org/Home/JobPosting/${postingId}`;
+    if (!jobPostingUrl || seenUrls.has(jobPostingUrl)) continue;
+    const city = toCleanString(item?.city);
+    const county = toCleanString(item?.countyName);
+    const location = [city, county].filter(Boolean).join(", ") || null;
+
+    postings.push({
+      company_name: toCleanString(item?.districtName) || "Unknown District",
+      position_name: toCleanString(item?.positionTitle) || "Untitled Position",
+      job_posting_url: jobPostingUrl,
+      posting_date: parseEdjoinPostingDate(item?.postingDate),
+      location
+    });
+    seenUrls.add(jobPostingUrl);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForEdjoinDynamic(rows = 25) {
+  const endpoint = "https://www.edjoin.org/Home/LoadJobs";
+  const pageSize = Math.max(1, Number.parseInt(String(rows || 25), 10) || 25);
+  const referenceEpoch = nowEpochSeconds();
+  const postings = [];
+  const seenUrls = new Set();
+  let page = 1;
+
+  while (true) {
+    const requestUrl = new URL(endpoint);
+    requestUrl.searchParams.set("rows", String(pageSize));
+    requestUrl.searchParams.set("page", String(page));
+    requestUrl.searchParams.set("sort", "postingDate");
+    requestUrl.searchParams.set("sortVal", "2");
+    requestUrl.searchParams.set("order", "desc");
+    requestUrl.searchParams.set("keywords", "");
+    requestUrl.searchParams.set("location", "");
+    requestUrl.searchParams.set("searchType", "all");
+    requestUrl.searchParams.set("regions", "");
+    requestUrl.searchParams.set("jobTypes", "");
+    requestUrl.searchParams.set("days", "0");
+    requestUrl.searchParams.set("empType", "");
+    requestUrl.searchParams.set("catID", "0");
+    requestUrl.searchParams.set("onlineApps", "false");
+    requestUrl.searchParams.set("recruitmentCenterID", "0");
+    requestUrl.searchParams.set("stateID", "0");
+    requestUrl.searchParams.set("regionID", "0");
+    requestUrl.searchParams.set("districtID", "0");
+    requestUrl.searchParams.set("searchID", "0");
+    requestUrl.searchParams.set("_", String(Date.now()));
+
+    const res = await fetchWithAtsRateLimit("edjoin", EDJOIN_RATE_LIMIT_WAIT_MS, requestUrl.toString(), {
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        Origin: "https://www.edjoin.org",
+        Referer: "https://www.edjoin.org/"
+      }
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`EdJoin request failed (${res.status}): ${body.slice(0, 180)}`);
+    }
+
+    const payload = await res.json();
+    const batch = parseEdjoinPostingsFromPayload(payload);
+    if (batch.length === 0) break;
+
+    let hasWithin24h = false;
+    for (const posting of batch) {
+      const postingUrl = String(posting?.job_posting_url || "").trim();
+      if (!postingUrl || seenUrls.has(postingUrl)) continue;
+      if (!shouldStorePostingByDate(posting?.posting_date, referenceEpoch)) continue;
+      hasWithin24h = true;
+      postings.push(posting);
+      seenUrls.add(postingUrl);
+    }
+
+    if (!hasWithin24h) break;
+    page += 1;
+  }
+
+  return postings;
+}
+
+function cleanWebcruiterText(value) {
+  return decodeHtmlEntities(String(value || "").replace(/<[^>]+>/g, " "))
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseWebcruiterPublishedDateToIso(value) {
+  const raw = cleanWebcruiterText(value);
+  if (!raw) return null;
+  const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return raw;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return raw;
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  if (Number.isNaN(utcDate.getTime())) return raw;
+  return utcDate.toISOString();
+}
+
+function parseWebcruiterPostingsFromPayload(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  const rows = Array.isArray(payload.Data) ? payload.Data : [];
+  const postings = [];
+  const seenUrls = new Set();
+
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+
+    const postingId = cleanWebcruiterText(row.Id);
+    const openAdvertUrl = cleanWebcruiterText(row.OpenAdvertUrl);
+    const jobPostingUrl = openAdvertUrl
+      ? openAdvertUrl
+      : postingId
+        ? `https://candidate.webcruiter.com/en-gb/jobs/${postingId}`
+        : "";
+    if (!jobPostingUrl || seenUrls.has(jobPostingUrl)) continue;
+
+    const companyName = cleanWebcruiterText(row.CompanyName) || "Unknown Company";
+    const positionName = cleanWebcruiterText(row.Heading) || "Untitled Position";
+    const workplace =
+      cleanWebcruiterText(row.Workplace) ||
+      cleanWebcruiterText(row.Workplace2) ||
+      cleanWebcruiterText(row.Workplace3) ||
+      null;
+    const postingDate = parseWebcruiterPublishedDateToIso(row.PublishedDate);
+
+    postings.push({
+      company_name: companyName,
+      position_name: positionName,
+      job_posting_url: jobPostingUrl,
+      posting_date: postingDate,
+      location: workplace
+    });
+    seenUrls.add(jobPostingUrl);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForWebcruiterDynamic() {
+  const endpoint = "https://candidate.webcruiter.com/api/odvert/search";
+  const baseUrl = "https://candidate.webcruiter.com/en-gb/home/alladverts/webcruiter-id#search";
+  const referenceEpoch = nowEpochSeconds();
+  const postings = [];
+  const seenUrls = new Set();
+  const take = 20;
+  let skip = 0;
+  let page = 1;
+
+  while (true) {
+    const body = {
+      take,
+      skip,
+      page,
+      pageSize: take,
+      sort: [{ field: "1", dir: "desc" }]
+    };
+
+    const res = await fetchWithAtsRateLimit("webcruiter", WEBCRUITER_RATE_LIMIT_WAIT_MS, endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Content-Type": "application/json",
+        Origin: "https://candidate.webcruiter.com",
+        Referer: baseUrl
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      throw new Error(`Webcruiter request failed (${res.status}): ${errorBody.slice(0, 180)}`);
+    }
+
+    const payload = await res.json();
+    const batch = parseWebcruiterPostingsFromPayload(payload);
+    if (batch.length === 0) break;
+
+    let hasWithin24h = false;
+    for (const posting of batch) {
+      const postingUrl = String(posting?.job_posting_url || "").trim();
+      if (!postingUrl || seenUrls.has(postingUrl)) continue;
+      if (!shouldStorePostingByDate(posting?.posting_date, referenceEpoch)) continue;
+      hasWithin24h = true;
+      postings.push(posting);
+      seenUrls.add(postingUrl);
+    }
+
+    if (!hasWithin24h) break;
+    skip += take;
+    page += 1;
+  }
+
+  return postings;
+}
+
 function cleanCalcareersText(value) {
   return decodeHtmlEntities(String(value || "").replace(/<[^>]+>/g, " "))
     .replace(/\u00a0/g, " ")
@@ -11517,6 +14069,101 @@ async function collectPostingsForStatejobsnyDynamic() {
   return parseStatejobsnyPostingsFromHtml(pageHtml, endpoint);
 }
 
+function cleanAcademicJobsOnlineText(value) {
+  return decodeHtmlEntities(String(value || "").replace(/<[^>]+>/g, " "))
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseAcademicJobsOnlinePostedDate(value) {
+  const raw = cleanAcademicJobsOnlineText(value);
+  if (!raw) return null;
+  const match = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  const dt = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
+}
+
+function parseAcademicJobsOnlinePostingsFromHtml(pageHtml, baseUrl) {
+  const source = String(pageHtml || "");
+  if (!source) return [];
+
+  const postings = [];
+  const seenUrls = new Set();
+  const blockRegex = /<div class="clr">([\s\S]*?)<\/div>\s*(?=<div class="clr">|<hr>|<\/main>)/gi;
+  const h3Regex = /<h3[^>]*>([\s\S]*?)<\/h3>/i;
+  const liRegex = /<li>([\s\S]*?)<\/li>/gi;
+  const hrefRegex = /href="(\/ajo\/jobs\/\d+)"/i;
+  const titleRegex = /id="j\d+"[^>]*>([\s\S]*?)<\/span>/i;
+  const postedRegex = /\(posted\s*<span[^>]*>(\d{4}\/\d{2}\/\d{2})<\/span>\s*\)/i;
+
+  let blockMatch = blockRegex.exec(source);
+  while (blockMatch) {
+    const blockHtml = String(blockMatch[1] || "");
+    const h3Match = h3Regex.exec(blockHtml);
+    const companyName = cleanAcademicJobsOnlineText(h3Match?.[1] || "") || "Unknown Company";
+
+    let liMatch = liRegex.exec(blockHtml);
+    while (liMatch) {
+      const liHtml = String(liMatch[1] || "");
+      const hrefMatch = hrefRegex.exec(liHtml);
+      if (!hrefMatch?.[1]) {
+        liMatch = liRegex.exec(blockHtml);
+        continue;
+      }
+
+      const jobUrl = urljoin(baseUrl, cleanAcademicJobsOnlineText(hrefMatch[1]));
+      if (!jobUrl || seenUrls.has(jobUrl)) {
+        liMatch = liRegex.exec(blockHtml);
+        continue;
+      }
+
+      const titleMatch = titleRegex.exec(liHtml);
+      const postedMatch = postedRegex.exec(liHtml);
+      const postingDate = parseAcademicJobsOnlinePostedDate(postedMatch?.[1] || "");
+
+      postings.push({
+        company_name: companyName,
+        position_name: cleanAcademicJobsOnlineText(titleMatch?.[1] || "") || "Untitled Position",
+        job_posting_url: jobUrl,
+        posting_date: postingDate,
+        location: null
+      });
+      seenUrls.add(jobUrl);
+      liMatch = liRegex.exec(blockHtml);
+    }
+
+    blockMatch = blockRegex.exec(source);
+  }
+
+  return postings;
+}
+
+async function collectPostingsForAcademicJobsOnlineDynamic() {
+  const endpoint = "https://academicjobsonline.org/ajo?joblst-44-0-0-0---0-p--";
+  const res = await fetchWithAtsRateLimit("academicjobsonline", 60 * 1000, endpoint, {
+    method: "GET",
+    headers: {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9"
+    }
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`AcademicJobsOnline request failed (${res.status}): ${body.slice(0, 180)}`);
+  }
+  const pageHtml = await res.text();
+  const referenceEpoch = nowEpochSeconds();
+  const allPostings = parseAcademicJobsOnlinePostingsFromHtml(pageHtml, res.url || endpoint);
+  return allPostings.filter((posting) => shouldStorePostingByDate(posting?.posting_date, referenceEpoch));
+}
+
 async function collectPostingsForCompany(company) {
   const atsName = String(company?.ATS_name || "").trim().toLowerCase();
   if (atsName === "workday") {
@@ -11587,6 +14234,15 @@ async function collectPostingsForCompany(company) {
     return collectPostingsForAdpMyjobsCompany(company);
   }
   if (
+    atsName === "paycomonline" ||
+    atsName === "paycomonline.net" ||
+    atsName === "paycomonlinenet" ||
+    atsName === "www.paycomonline.net" ||
+    atsName === "wwwpaycomonlinenet"
+  ) {
+    return collectPostingsForPaycomonlineCompany(company);
+  }
+  if (
     atsName === "adp_workforcenow" ||
     atsName === "adpworkforcenow" ||
     atsName === "workforcenow.adp.com" ||
@@ -11638,6 +14294,131 @@ async function collectPostingsForCompany(company) {
     return collectPostingsForIsolvisolvedhireCompany(company);
   }
   if (
+    atsName === "avature" ||
+    atsName === "avature.net" ||
+    atsName === "avaturenet"
+  ) {
+    return collectPostingsForAvatureCompany(company);
+  }
+  if (
+    atsName === "comeet" ||
+    atsName === "comeet.com" ||
+    atsName === "comeetcom" ||
+    atsName === "www.comeet.com" ||
+    atsName === "wwwcomeetcom"
+  ) {
+    return collectPostingsForComeetCompany(company);
+  }
+  if (
+    atsName === "factorialhr" ||
+    atsName === "factorialhr.com" ||
+    atsName === "factorialhrcom"
+  ) {
+    return collectPostingsForFactorialhrCompany(company);
+  }
+  if (
+    atsName === "hireology" ||
+    atsName === "hireology.careers" ||
+    atsName === "hireologycareers"
+  ) {
+    return collectPostingsForHireologyCompany(company);
+  }
+  if (
+    atsName === "hiringplatform" ||
+    atsName === "hiringplatform.com" ||
+    atsName === "hiringplatformcom"
+  ) {
+    return collectPostingsForHiringplatformCompany(company);
+  }
+  if (atsName === "homerun" || atsName === "homerun.co" || atsName === "homerunco") {
+    return collectPostingsForHomerunCompany(company);
+  }
+  if (atsName === "jibeapply" || atsName === "jibeapply.com" || atsName === "jibeapplycom") {
+    return collectPostingsForJibeapplyCompany(company);
+  }
+  if (atsName === "jobs2web" || atsName === "jobs2web.com" || atsName === "jobs2webcom") {
+    return collectPostingsForJobs2webCompany(company);
+  }
+  if (
+    atsName === "occupop" ||
+    atsName === "occupop.com" ||
+    atsName === "occupopcom" ||
+    atsName === "occupop-careers.com" ||
+    atsName === "occupopcareerscom"
+  ) {
+    return collectPostingsForOccupopCompany(company);
+  }
+  if (
+    atsName === "peopleadmin" ||
+    atsName === "peopleadmin.com" ||
+    atsName === "peopleadmincom"
+  ) {
+    return collectPostingsForPeopleadminCompany(company);
+  }
+  if (
+    atsName === "personio" ||
+    atsName === "personio.com" ||
+    atsName === "personiocom" ||
+    atsName === "jobs.personio.com" ||
+    atsName === "jobspersoniocom"
+  ) {
+    return collectPostingsForPersonioCompany(company);
+  }
+  if (
+    atsName === "recruiterflow" ||
+    atsName === "recruiterflow.com" ||
+    atsName === "recruiterflowcom" ||
+    atsName === "www.recruiterflow.com" ||
+    atsName === "wwwrecruiterflowcom"
+  ) {
+    return collectPostingsForRecruiterflowCompany(company);
+  }
+  if (
+    atsName === "softgarden" ||
+    atsName === "softgarden.io" ||
+    atsName === "softgardenio"
+  ) {
+    return collectPostingsForSoftgardenCompany(company);
+  }
+  if (
+    atsName === "trakstar" ||
+    atsName === "hire.trakstar.com" ||
+    atsName === "hiretrakstarcom" ||
+    atsName === "recruiterbox.com" ||
+    atsName === "recruiterboxcom" ||
+    atsName === "trakstarhire.com" ||
+    atsName === "trakstarhirecom"
+  ) {
+    return collectPostingsForTrakstarCompany(company);
+  }
+  if (
+    atsName === "ycombinator" ||
+    atsName === "ycombinator.com" ||
+    atsName === "ycombinatorcom" ||
+    atsName === "www.ycombinator.com" ||
+    atsName === "wwwycombinatorcom"
+  ) {
+    return collectPostingsForYcombinatorCompany(company);
+  }
+  if (
+    atsName === "yello" ||
+    atsName === "yello.co" ||
+    atsName === "yelloco" ||
+    atsName === "www.yello.co" ||
+    atsName === "wwwyelloco"
+  ) {
+    return collectPostingsForYelloCompany(company);
+  }
+  if (
+    atsName === "crelate" ||
+    atsName === "crelate.com" ||
+    atsName === "crelatecom" ||
+    atsName === "jobs.crelate.com" ||
+    atsName === "jobscrelatecom"
+  ) {
+    return collectPostingsForCrelateCompany(company);
+  }
+  if (
     atsName === "manatal" ||
     atsName === "manatal.com" ||
     atsName === "manatalcom" ||
@@ -11673,6 +14454,9 @@ async function collectPostingsForCompany(company) {
   }
   if (atsName === "freshteam" || atsName === "freshteam.com" || atsName === "freshteamcom") {
     return collectPostingsForFreshteamCompany(company);
+  }
+  if (atsName === "agilehr" || atsName === "agilehr.com" || atsName === "agilehrcom") {
+    return collectPostingsForAgilehrCompany(company);
   }
   if (
     atsName === "sagehr" ||
@@ -11734,6 +14518,33 @@ async function collectPostingsForCompany(company) {
     return collectPostingsForSchoolspringDynamic();
   }
   if (
+    atsName === "edjoin" ||
+    atsName === "edjoin.org" ||
+    atsName === "edjoinorg" ||
+    atsName === "www.edjoin.org" ||
+    atsName === "wwwedjoinorg"
+  ) {
+    return collectPostingsForEdjoinDynamic();
+  }
+  if (
+    atsName === "webcruiter" ||
+    atsName === "webcruiter.com" ||
+    atsName === "webcruitercom" ||
+    atsName === "candidate.webcruiter.com" ||
+    atsName === "candidatewebcruitercom"
+  ) {
+    return collectPostingsForWebcruiterDynamic();
+  }
+  if (
+    atsName === "academicjobsonline" ||
+    atsName === "academicjobsonline.org" ||
+    atsName === "academicjobsonlineorg" ||
+    atsName === "www.academicjobsonline.org" ||
+    atsName === "wwwacademicjobsonlineorg"
+  ) {
+    return collectPostingsForAcademicJobsOnlineDynamic();
+  }
+  if (
     atsName === "calcareers" ||
     atsName === "calcareers.ca.gov" ||
     atsName === "calcareerscagov" ||
@@ -11781,8 +14592,17 @@ async function collectPostingsForCompany(company) {
   if (atsName === "recruiteecom" || atsName === "recruitee.com" || atsName === "recruitee") {
     return collectPostingsForRecruiteeCompany(company);
   }
-  if (atsName === "ultipro" || atsName === "ukg") {
+  if (atsName === "ultipro") {
     return collectPostingsForUltiProCompany(company);
+  }
+  if (
+    atsName === "ukg" ||
+    atsName === "ukg.net" ||
+    atsName === "ukgnet" ||
+    atsName === "rec.pro.ukg.net" ||
+    atsName === "recproukgnet"
+  ) {
+    return collectPostingsForUkgCompany(company);
   }
   if (atsName === "taleo" || atsName === "taleo.net" || atsName === "taleonet") {
     return collectPostingsForTaleoCompany(company);
@@ -12118,6 +14938,7 @@ async function ensureSyncServiceSettingsTable() {
       id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
       ats_request_queue_concurrency INTEGER NOT NULL DEFAULT 1,
       sync_enabled_ats TEXT NOT NULL DEFAULT '[]',
+      posting_freshness_hours INTEGER NOT NULL DEFAULT 24,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
@@ -12132,6 +14953,12 @@ async function ensureSyncServiceSettingsTable() {
       ADD COLUMN sync_enabled_ats TEXT NOT NULL DEFAULT '[]';
     `);
   }
+  if (!syncSettingsColumnNames.has("posting_freshness_hours")) {
+    await db.exec(`
+      ALTER TABLE SyncServiceSettings
+      ADD COLUMN posting_freshness_hours INTEGER NOT NULL DEFAULT 24;
+    `);
+  }
 
   await db.run(
     `
@@ -12139,13 +14966,15 @@ async function ensureSyncServiceSettingsTable() {
         id,
         ats_request_queue_concurrency,
         sync_enabled_ats,
+        posting_freshness_hours,
         updated_at
-      ) VALUES (1, ?, ?, datetime('now'))
+      ) VALUES (1, ?, ?, ?, datetime('now'))
       ON CONFLICT(id) DO NOTHING;
     `,
     [
       SYNC_SERVICE_SETTINGS_DEFAULTS.ats_request_queue_concurrency,
-      JSON.stringify(SYNC_SERVICE_SETTINGS_DEFAULTS.sync_enabled_ats)
+      JSON.stringify(SYNC_SERVICE_SETTINGS_DEFAULTS.sync_enabled_ats),
+      SYNC_SERVICE_SETTINGS_DEFAULTS.posting_freshness_hours
     ]
   );
 }
@@ -12235,7 +15064,8 @@ async function getStoredSyncServiceSettings() {
     `
       SELECT
         ats_request_queue_concurrency,
-        sync_enabled_ats
+        sync_enabled_ats,
+        posting_freshness_hours
       FROM SyncServiceSettings
       WHERE id = 1
       LIMIT 1;
@@ -12246,7 +15076,8 @@ async function getStoredSyncServiceSettings() {
     {
       ...SYNC_SERVICE_SETTINGS_DEFAULTS,
       ats_request_queue_concurrency: row?.ats_request_queue_concurrency,
-      sync_enabled_ats: row?.sync_enabled_ats
+      sync_enabled_ats: row?.sync_enabled_ats,
+      posting_freshness_hours: row?.posting_freshness_hours
     },
     SYNC_SERVICE_SETTINGS_DEFAULTS
   );
@@ -12256,6 +15087,7 @@ async function loadSyncServiceSettingsIntoRuntime() {
   const stored = await getStoredSyncServiceSettings();
   atsRequestQueueConcurrency = normalizeAtsRequestQueueConcurrency(stored?.ats_request_queue_concurrency);
   syncEnabledAts = new Set(normalizeSyncEnabledAts(stored?.sync_enabled_ats));
+  postingFreshnessHours = normalizePostingFreshnessHours(stored?.posting_freshness_hours);
   return stored;
 }
 
@@ -12263,6 +15095,9 @@ async function getSyncServiceSettings() {
   const stored = await getStoredSyncServiceSettings();
   return {
     ...stored,
+    active_posting_freshness_hours: postingFreshnessHours,
+    min_posting_freshness_hours: MIN_POSTING_FRESHNESS_HOURS,
+    max_posting_freshness_hours: MAX_POSTING_FRESHNESS_HOURS,
     active_ats_request_queue_concurrency: atsRequestQueueConcurrency,
     min_ats_request_queue_concurrency: MIN_ATS_REQUEST_QUEUE_CONCURRENCY,
     max_ats_request_queue_concurrency: MAX_ATS_REQUEST_QUEUE_CONCURRENCY,
@@ -12280,17 +15115,24 @@ async function upsertSyncServiceSettings(input = {}) {
         id,
         ats_request_queue_concurrency,
         sync_enabled_ats,
+        posting_freshness_hours,
         updated_at
-      ) VALUES (1, ?, ?, datetime('now'))
+      ) VALUES (1, ?, ?, ?, datetime('now'))
       ON CONFLICT(id) DO UPDATE SET
         ats_request_queue_concurrency = excluded.ats_request_queue_concurrency,
         sync_enabled_ats = excluded.sync_enabled_ats,
+        posting_freshness_hours = excluded.posting_freshness_hours,
         updated_at = datetime('now');
     `,
-    [normalized.ats_request_queue_concurrency, JSON.stringify(normalized.sync_enabled_ats)]
+    [
+      normalized.ats_request_queue_concurrency,
+      JSON.stringify(normalized.sync_enabled_ats),
+      normalized.posting_freshness_hours
+    ]
   );
 
   syncEnabledAts = new Set(normalized.sync_enabled_ats);
+  postingFreshnessHours = normalizePostingFreshnessHours(normalized.posting_freshness_hours);
   return getSyncServiceSettings();
 }
 
@@ -13655,6 +16497,15 @@ async function getSyncScopeStats() {
   if (enabledAts.has("statejobsny")) {
     syncEnabledCompanyCount += STATEJOBSNY_ESTIMATED_COMPANY_COUNT;
   }
+  if (enabledAts.has("edjoin")) {
+    syncEnabledCompanyCount += EDJOIN_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("webcruiter")) {
+    syncEnabledCompanyCount += WEBCRUITER_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("academicjobsonline")) {
+    syncEnabledCompanyCount += ACADEMICJOBSONLINE_ESTIMATED_COMPANY_COUNT;
+  }
 
   return {
     sync_enabled_company_count: syncEnabledCompanyCount,
@@ -13742,7 +16593,7 @@ async function upsertPostings(postings, lastSeenEpoch) {
 
 async function pruneExpiredPostings(referenceEpoch = nowEpochSeconds()) {
   const resolvedReferenceEpoch = Number(referenceEpoch || nowEpochSeconds());
-  const cutoffEpoch = resolvedReferenceEpoch - POSTING_TTL_SECONDS;
+  const cutoffEpoch = resolvedReferenceEpoch - getPostingFreshnessWindowSeconds();
   const result = await db.run(
     `
       UPDATE Postings
@@ -13928,11 +16779,36 @@ async function runWorkdaySyncInternal() {
         ATS_name: "statejobsny"
       });
     }
+    if (enabledAts.has("edjoin")) {
+      syncTargets.push({
+        id: null,
+        company_name: "EdJoin (dynamic)",
+        url_string:
+          "https://www.edjoin.org/Home/LoadJobs?rows=25&page=1&sort=postingDate&sortVal=2&order=desc&keywords=&location=&searchType=all&regions=&jobTypes=&days=0&empType=&catID=0&onlineApps=false&recruitmentCenterID=0&stateID=0&regionID=0&districtID=0&searchID=0",
+        ATS_name: "edjoin"
+      });
+    }
+    if (enabledAts.has("webcruiter")) {
+      syncTargets.push({
+        id: null,
+        company_name: "Webcruiter (dynamic)",
+        url_string: "https://candidate.webcruiter.com/en-gb/home/alladverts/webcruiter-id#search",
+        ATS_name: "webcruiter"
+      });
+    }
+    if (enabledAts.has("academicjobsonline")) {
+      syncTargets.push({
+        id: null,
+        company_name: "AcademicJobsOnline (dynamic)",
+        url_string: "https://academicjobsonline.org/ajo?joblst-44-0-0-0---0-p--",
+        ATS_name: "academicjobsonline"
+      });
+    }
 
     syncStatus.progress.total = syncTargets.length;
     let totalPruned = await pruneExpiredPostings(syncReferenceEpoch);
     let postingDatePruned = await prunePostingsOutsideDateWindow(syncReferenceEpoch);
-    const nextPostingLocationByJobUrl = new Map();
+    const nextPostingLocationByJobUrl = new Map(postingLocationByJobUrl);
 
     const dedupedPostings = new Map();
     const pendingPostingsForUpsert = [];
@@ -13980,7 +16856,10 @@ async function runWorkdaySyncInternal() {
             if (dedupedPostings.has(posting.job_posting_url)) continue;
             dedupedPostings.set(posting.job_posting_url, posting);
             pendingPostingsForUpsert.push(posting);
-            const location = String(posting?.location || "").trim();
+            const directLocation = String(posting?.location || "").trim();
+            const inferredLocation = String(inferPostingLocationFromJobUrl(posting?.job_posting_url) || "").trim();
+            const existingLocation = String(postingLocationByJobUrl.get(posting?.job_posting_url) || "").trim();
+            const location = directLocation || inferredLocation || existingLocation;
             if (location) {
               nextPostingLocationByJobUrl.set(posting.job_posting_url, location);
               postingLocationByJobUrl.set(posting.job_posting_url, location);
@@ -14133,10 +17012,18 @@ function createServer() {
   });
 
   app.get("/sync/status", async (_req, res) => {
-    const [counts, syncScopeStats] = await Promise.all([getCounts(), getSyncScopeStats()]);
+    const [counts, syncScopeStats, syncSettings] = await Promise.all([
+      getCounts(),
+      getSyncScopeStats(),
+      getSyncServiceSettings()
+    ]);
     const payload = sanitizeFrontendValue({
       ...syncStatus,
       ...syncScopeStats,
+      posting_freshness_hours: syncSettings?.posting_freshness_hours,
+      active_posting_freshness_hours: syncSettings?.active_posting_freshness_hours,
+      min_posting_freshness_hours: syncSettings?.min_posting_freshness_hours,
+      max_posting_freshness_hours: syncSettings?.max_posting_freshness_hours,
       ...counts
     });
     res.json(payload);
@@ -14246,13 +17133,23 @@ function createServer() {
     }
 
     const locationGeoOptions = getPostingLocationGeoFilterOptions();
+    let countries = Array.isArray(locationGeoOptions?.countries) ? locationGeoOptions.countries : [];
+    if (countries.length === 0 && states.length > 0) {
+      countries = [
+        {
+          value: "US",
+          label: "United States",
+          region: "AMER"
+        }
+      ];
+    }
 
     res.json({
       ats,
       sort_options,
       industries,
       regions: Array.isArray(locationGeoOptions?.regions) ? locationGeoOptions.regions : [],
-      countries: Array.isArray(locationGeoOptions?.countries) ? locationGeoOptions.countries : [],
+      countries,
       states,
       counties
     });

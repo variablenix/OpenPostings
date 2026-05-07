@@ -2,9 +2,9 @@
 
 OpenPostings is an OpenSource ATS job aggregator and application tracking app. **It pulls jobs that were posted in the last 24 hours** or that has no posted date. 
 
-Over **78000+** companies from multiple ATSs all sourced into 1 location!
+Over **100000+** companies from multiple ATSs all sourced into 1 location!
 
-Over **500000+** fresh jobs on average **DAILY**!
+Over **THOUSANDS** fresh jobs on average **DAILY**!
 
 ## Youtube Video
 [![OpenPostings Discussion](https://img.youtube.com/vi/5sVIhhwx3Yk/0.jpg)](https://www.youtube.com/watch?v=5sVIhhwx3Yk)
@@ -94,11 +94,34 @@ Current sync support includes:
 - `calcareers`
 - `calopps`
 - `statejobsny`
+- `PaycomOnline`
+- `AgileHR`
+- `Avature`
+- `Comeet`
+- `FactorialHR`
+- `Hireology`
+- `Crelate`
+- `HiringPlatform`
+- `Homerun`
+- `JibeApply`
+- `Jobs2Web`
+- `Occupop`
+- `PeopleAdmin`
+- `Personio`
+- `Recruiterflow`
+- `Softgarden`
+- `Trakstar`
+- `UKG`
+- `YCombinator`
+- `Yello`
+- `EdJoin`
+- `Webcruiter`
+- `AcademicJobsOnline`
 
 <br>
 <img src="README-Images/ATS_list.png" alt="Applications" width="70%" />
 
-OVER **78000+** companies in total. All gathered from search engine data like Google and DuckDuckGo and also using subdomain searching techniques and directory searching techniques. 
+OVER **100000+** companies in total. All gathered from search engine data like Google and DuckDuckGo and also using subdomain searching techniques and directory searching techniques. 
 <br>
 <img src="README-Images/company_amount.png" alt="Applications" width="25%" />
 <br>
