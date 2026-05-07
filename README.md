@@ -129,7 +129,7 @@ It pulls in new job data at random from companies and stores it in the database.
 
 ## Windows Installer Setup (Windows 10/11) (Easiest Setup But Still WIP and may have some bugs)
 Download the latest installer from the github releases page and run it. It will guide you through installation and setup.
-- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.5/openpostings-1.0.5-x64.msi
+- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.7/openpostings-1.0.7-x64.msi
 
 Choose the setup type during install:
 - `Typical`: Installs the standard OpenPostings app setup (Includes the backend service worker, recommended for most users).

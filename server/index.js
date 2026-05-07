@@ -595,6 +595,52 @@ const COUNTRY_DEFINITIONS = Object.freeze([
   { code: "BN", label: "Brunei", region: "APAC", aliases: ["brunei darussalam"] },
   { code: "MN", label: "Mongolia", region: "APAC", aliases: [] }
 ]);
+const DEFAULT_COUNTRY_FILTER_LABELS = Object.freeze([
+  "Alberta",
+  "Argentina",
+  "Armenia",
+  "Austria",
+  "Azerbaijan",
+  "Belgium",
+  "Brazil",
+  "Canada",
+  "Chile",
+  "Colombia",
+  "Croatia",
+  "Croydon",
+  "Denmark",
+  "France",
+  "Germany",
+  "Hillview",
+  "India",
+  "Ireland",
+  "Jalisco",
+  "Jordan",
+  "K Vlinge",
+  "Kazakhstan",
+  "Kenya",
+  "Lund",
+  "Mexico",
+  "Moldova",
+  "Nederland",
+  "Netherlands",
+  "North Macedonia",
+  "Nsw",
+  "Ontario",
+  "Philippines",
+  "Poland",
+  "Portugal",
+  "Queensland",
+  "Romania",
+  "Serbia",
+  "South Africa",
+  "Tomelilla",
+  "Turkey",
+  "Undefined",
+  "United Kingdom",
+  "United States",
+  "Venezuela"
+]);
 const US_STATE_NAMES = new Set(Object.values(STATE_CODE_TO_NAME).map((name) => normalizeGeoText(name)));
 const LOCATION_GEO_INFERENCE_CACHE_LIMIT = 30000;
 const APPLICATION_STATUS_OPTIONS = new Set([
@@ -988,6 +1034,45 @@ const {
   aliasesByCode: COUNTRY_ALIASES_BY_CODE
 } = buildCountryLookupMaps();
 
+function buildDefaultCountryFilterOptions() {
+  const options = [];
+  const seenValues = new Set();
+
+  for (const rawLabel of DEFAULT_COUNTRY_FILTER_LABELS) {
+    const label = String(rawLabel || "").trim();
+    if (!label) continue;
+
+    const explicitCode = label.toUpperCase();
+    const normalizedLabel = normalizeCountryLikePart(label);
+    const matchedCode = COUNTRY_BY_CODE.has(explicitCode)
+      ? explicitCode
+      : COUNTRY_ALIAS_TO_CODE.get(normalizedLabel);
+    const matchedCountry = matchedCode ? COUNTRY_BY_CODE.get(matchedCode) : null;
+
+    let value = label;
+    let region = "";
+    if (matchedCountry) {
+      value = matchedCountry.code;
+      region = String(matchedCountry.region || "").trim().toUpperCase();
+    } else if (isLikelyCountryLikePart(normalizedLabel)) {
+      value = `RAW:${normalizedLabel}`;
+      region = inferRegionFromLocationText(label);
+    }
+
+    if (seenValues.has(value)) continue;
+    seenValues.add(value);
+    options.push({
+      value,
+      label,
+      region
+    });
+  }
+
+  return Object.freeze(options);
+}
+
+const DEFAULT_COUNTRY_FILTER_OPTIONS = buildDefaultCountryFilterOptions();
+
 function parseRegionFilters(values) {
   const normalized = normalizeStringArray(values)
     .map((value) => String(value || "").trim().toUpperCase())
@@ -1197,8 +1282,14 @@ function getPostingLocationGeoFilterOptions() {
     return postingLocationGeoFilterOptionsCache;
   }
 
-  const countriesByValue = new Map();
+  const countriesByValue = new Map(DEFAULT_COUNTRY_FILTER_OPTIONS.map((country) => [country.value, { ...country }]));
+  const defaultCountryValues = new Set(DEFAULT_COUNTRY_FILTER_OPTIONS.map((country) => country.value));
   const presentRegions = new Set();
+  for (const country of DEFAULT_COUNTRY_FILTER_OPTIONS) {
+    const region = String(country?.region || "").trim().toUpperCase();
+    if (region) presentRegions.add(region);
+  }
+
   for (const location of postingLocationByJobUrl.values()) {
     const inferred = inferLocationGeo(location);
     if (inferred.countryValue && inferred.countryLabel) {
@@ -1209,6 +1300,8 @@ function getPostingLocationGeoFilterOptions() {
           label: inferred.countryLabel,
           region: inferred.region || ""
         });
+      } else if (!existing.label && inferred.countryLabel) {
+        existing.label = inferred.countryLabel;
       } else if (!existing.region && inferred.region) {
         existing.region = inferred.region;
       }
@@ -1216,9 +1309,25 @@ function getPostingLocationGeoFilterOptions() {
     if (inferred.region) presentRegions.add(inferred.region);
   }
 
-  const countries = Array.from(countriesByValue.values()).sort((a, b) =>
-    String(a?.label || "").localeCompare(String(b?.label || ""))
-  );
+  const defaultCountriesInOrder = DEFAULT_COUNTRY_FILTER_OPTIONS.map((country) => countriesByValue.get(country.value))
+    .filter(Boolean);
+  const dynamicCountries = Array.from(countriesByValue.values())
+    .filter((country) => !defaultCountryValues.has(country.value))
+    .sort((a, b) =>
+      String(a?.label || "").localeCompare(String(b?.label || ""))
+    );
+  const countries = [...defaultCountriesInOrder, ...dynamicCountries].sort((a, b) => {
+    const aIsDefault = defaultCountryValues.has(a?.value);
+    const bIsDefault = defaultCountryValues.has(b?.value);
+    if (aIsDefault && !bIsDefault) return -1;
+    if (!aIsDefault && bIsDefault) return 1;
+    if (aIsDefault && bIsDefault) {
+      const aIndex = DEFAULT_COUNTRY_FILTER_OPTIONS.findIndex((country) => country.value === a.value);
+      const bIndex = DEFAULT_COUNTRY_FILTER_OPTIONS.findIndex((country) => country.value === b.value);
+      return aIndex - bIndex;
+    }
+    return String(a?.label || "").localeCompare(String(b?.label || ""));
+  });
   const regions = LOCATION_REGION_OPTIONS.filter(
     (option) => presentRegions.size === 0 || presentRegions.has(option.value)
   ).map((option) => ({ ...option }));
