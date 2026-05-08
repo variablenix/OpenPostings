@@ -85,7 +85,8 @@ const config = {
             title: "Project",
             items: [
               { label: "GitHub Repository", href: githubUrl },
-              { label: "Releases", href: `${githubUrl}/releases` }
+              { label: "Releases", href: `${githubUrl}/releases` },
+              { label: "Privacy Policy", to: "/privacy-policy" }
             ]
           }
         ],
