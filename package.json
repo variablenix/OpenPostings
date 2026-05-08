@@ -6,13 +6,16 @@
   "scripts": {
     "server": "node server/index.js",
     "mcp:apply-agent": "node server/mcp-apply-server.js",
+    "prepare:android:backend": "node ./scripts/android/prepare-node-backend.mjs",
+    "postinstall": "patch-package",
     "start": "expo start",
     "web": "expo start --web",
-    "android": "expo start --android",
+    "android": "npm run prepare:android:backend && expo run:android",
     "windows": "npx @react-native-community/cli run-windows",
     "export_windows_build": "powershell -ExecutionPolicy Bypass -File ./scripts/windows/export-windows-msi.ps1",
     "test:windows": "jest --config jest.config.windows.js",
-    "test:backend": "node --check server/index.js && node --check server/mcp-apply-server.js"
+    "test:backend": "node --check server/index.js && node --check server/mcp-apply-server.js",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -20,10 +23,13 @@
     "babel-preset-expo": "~54.0.10",
     "cors": "^2.8.6",
     "expo": "~54.0.0",
+    "expo-file-system": "^55.0.19",
     "express": "^5.2.1",
+    "nodejs-mobile-react-native": "^18.20.4",
     "react": "^19.1.4",
     "react-dom": "^19.1.4",
     "react-native": "0.81.6",
+    "react-native-background-actions": "^4.1.0",
     "react-native-web": "^0.21.0",
     "react-native-windows": "0.81.12",
     "sqlite": "^5.1.1",
@@ -31,7 +37,8 @@
   },
   "devDependencies": {
     "@react-native/metro-config": "^0.81.6",
-    "@rnx-kit/jest-preset": "^0.1.17"
+    "@rnx-kit/jest-preset": "^0.1.17",
+    "patch-package": "^8.0.1"
   },
   "react-native-windows": {
     "init-windows": {

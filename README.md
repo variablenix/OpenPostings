@@ -127,6 +127,16 @@ OVER **100000+** companies in total. All gathered from search engine data like G
 <br>
 It pulls in new job data at random from companies and stores it in the database. If the posting has lasted longer than 24 hours in the database its no longer used/deleted. 
 
+## Android Install from Google PlayStore (In Beta Comming Soon...)
+If you are interested in being a beta tester follow the Google Form here:
+
+- https://docs.google.com/forms/d/e/1FAIpQLSdVGhp667EiEB3Cxxc4KA8GTZzZ1CHtiAql4AOIA076W4RYsg/viewform?usp=dialog
+
+## Android Phone/Device DIRECT Install (Easiest Setup But Still WIP and may have some bugs)
+You can download the latest app from the github releases page and run it. 
+
+- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.7/app-release.apk
+
 ## Windows Installer Setup (Windows 10/11) (Easiest Setup But Still WIP and may have some bugs)
 Download the latest installer from the github releases page and run it. It will guide you through installation and setup.
 - https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.7/openpostings-1.0.7-x64.msi
@@ -181,7 +191,7 @@ Access the Web UI
 
 Default API base URL behavior:
 - Web/Windows: `http://localhost:8787`
-- Android emulator: `http://10.0.2.2:8787`
+- Android (on-device backend): `http://127.0.0.1:8787`
 
 
 ### You can run this Windows or Android as well!
@@ -220,6 +230,9 @@ Settings:
 - `PUT /settings/personal-information`
 - `GET /settings/mcp`
 - `PUT /settings/mcp`
+- `GET /settings/sync`
+- `PUT /settings/sync`
+- `GET /settings/export`
 
 MCP helper endpoints:
 

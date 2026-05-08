@@ -83,7 +83,7 @@ Open:
 API defaults:
 
 - Web/Windows: `http://localhost:8787`
-- Android emulator: `http://10.0.2.2:8787`
+- Android (on-device backend): `http://127.0.0.1:8787`
 
 ### Run Windows or Android client
 
@@ -105,5 +105,4 @@ After launch, confirm backend health:
 - `http://localhost:8787/health`
 
 You should receive a JSON response with `ok: true`.
-
 

@@ -12,6 +12,9 @@
     "web": {
       "bundler": "metro",
       "favicon": "./favicon.png"
+    },
+    "android": {
+      "package": "com.jatonjustice.openpostings" 
     }
   }
 }

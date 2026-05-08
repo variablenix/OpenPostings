@@ -89,6 +89,8 @@ You can import selected data from another SQlite database file. This is useful f
 - Blocked Companies
 - Applications
 
+You can also export the current settings snapshot from this section.
+
 ![Migration Tool Settings](/sync_settings_5.png)
 
 ## Save behavior
