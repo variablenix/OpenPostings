@@ -1,0 +1,41 @@
+diff --git a/node_modules/react-native-background-actions/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java b/node_modules/react-native-background-actions/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
+index 963b788..01418aa 100644
+--- a/node_modules/react-native-background-actions/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
++++ b/node_modules/react-native-background-actions/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
+@@ -24,6 +24,7 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+ 
+     public static final int SERVICE_NOTIFICATION_ID = 92901;
+     private static final String CHANNEL_ID = "RN_BACKGROUND_ACTIONS_CHANNEL";
++    private static final String STOP_SYNC_ACTION = "com.jatonjustice.openpostings.action.STOP_SYNC";
+ 
+     @SuppressLint("UnspecifiedImmutableFlag")
+     @NonNull
+@@ -53,11 +54,28 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+             pendingIntentFlags |= PendingIntent.FLAG_IMMUTABLE;
+         }
+         contentIntent = PendingIntent.getActivity(context, 0, notificationIntent, pendingIntentFlags);
++
++        Intent stopSyncIntent = new Intent(STOP_SYNC_ACTION);
++        stopSyncIntent.setClassName(context.getPackageName(), context.getPackageName() + ".StopSyncReceiver");
++        PendingIntent stopSyncPendingIntent = PendingIntent.getBroadcast(
++            context,
++            SERVICE_NOTIFICATION_ID,
++            stopSyncIntent,
++            pendingIntentFlags
++        );
++
++        NotificationCompat.Action stopSyncAction = new NotificationCompat.Action.Builder(
++            0,
++            "Stop Sync",
++            stopSyncPendingIntent
++        ).build();
++
+         final NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
+                 .setContentTitle(taskTitle)
+                 .setContentText(taskDesc)
+                 .setSmallIcon(iconInt)
+                 .setContentIntent(contentIntent)
++                .addAction(stopSyncAction)
+                 .setOngoing(true)
+                 .setPriority(NotificationCompat.PRIORITY_MIN)
+                 .setColor(color);

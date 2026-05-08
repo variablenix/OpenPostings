@@ -1,22 +1,62 @@
 import { Platform } from "react-native";
 
 const DEFAULT_API_BASE_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:8787" : "http://localhost:8787";
+  Platform.OS === "android" ? "http://127.0.0.1:8787" : "http://localhost:8787";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL;
+const IS_ANDROID_LOCAL_BACKEND =
+  Platform.OS === "android" &&
+  (API_BASE_URL.startsWith("http://127.0.0.1:") || API_BASE_URL.startsWith("http://localhost:"));
+const ANDROID_LOCAL_BACKEND_RETRY_DELAYS_MS = [250, 500, 750, 1000, 1250, 1500, 2000];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientAndroidLocalBackendError(errorValue) {
+  const message = String(errorValue?.message || errorValue || "").toLowerCase();
+  if (!message) return false;
+  return (
+    message.includes("network request failed") ||
+    message.includes("failed to fetch") ||
+    message.includes("connection refused")
+  );
+}
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const url = `${API_BASE_URL}${path}`;
+  const requestOptions = {
     headers: { "Content-Type": "application/json" },
     ...options
-  });
+  };
+  let lastError;
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text}`);
+  for (let attempt = 0; attempt <= ANDROID_LOCAL_BACKEND_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      const res = await fetch(url, requestOptions);
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+
+      return res.json();
+    } catch (errorValue) {
+      lastError = errorValue;
+      const shouldRetry =
+        IS_ANDROID_LOCAL_BACKEND &&
+        attempt < ANDROID_LOCAL_BACKEND_RETRY_DELAYS_MS.length &&
+        isTransientAndroidLocalBackendError(errorValue);
+
+      if (!shouldRetry) {
+        throw errorValue;
+      }
+
+      await sleep(ANDROID_LOCAL_BACKEND_RETRY_DELAYS_MS[attempt]);
+    }
   }
 
-  return res.json();
+  throw lastError || new Error("Request failed.");
 }
 
 export function fetchPostings(search = "", limit = 500, offset = 0, filters = {}) {
@@ -176,6 +216,12 @@ export function migrateDatabaseSettings(payload) {
     method: "POST",
     body: JSON.stringify(payload || {})
   });
+}
+
+export function fetchSettingsExport(options = {}) {
+  const includeMcp = options?.include_mcp !== false;
+  const suffix = includeMcp ? "?include_mcp=1" : "?include_mcp=0";
+  return request(`/settings/export${suffix}`);
 }
 
 export function fetchMcpCandidates(filters = {}) {

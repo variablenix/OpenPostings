@@ -4,8 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 const { promisify } = require("util");
-const { open } = require("sqlite");
-const sqlite3 = require("sqlite3");
+const { openDatabase, getSqliteReadOnlyMode } = require("./db/open-database");
 
 const PORT = Number(process.env.PORT || 8787);
 const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, "..", "jobs.db");
@@ -14725,9 +14724,8 @@ async function ensureCompaniesTableSchema() {
 }
 
 async function initDb() {
-  db = await open({
-    filename: DB_PATH,
-    driver: sqlite3.Database
+  db = await openDatabase({
+    filename: DB_PATH
   });
 
   await db.exec(`
@@ -16251,10 +16249,9 @@ async function migrateSettingsAndApplicationsFromDatabase(rawSourceDbPath, selec
 
   let sourceDb;
   try {
-    sourceDb = await open({
+    sourceDb = await openDatabase({
       filename: resolvedSourcePath,
-      driver: sqlite3.Database,
-      mode: sqlite3.OPEN_READONLY
+      mode: getSqliteReadOnlyMode()
     });
 
     if (selection.personal_information && (await tableExists(sourceDb, "PersonalInformation"))) {
@@ -16621,6 +16618,31 @@ async function getSyncScopeStats() {
     configured_enabled_ats_count: enabledAts.size,
     excluded_ats_count: Math.max(0, ATS_FILTER_OPTION_ITEMS.length - enabledAts.size)
   };
+}
+
+async function buildSettingsExportPayload(options = {}) {
+  const includeMcpSettings = options.include_mcp !== false;
+  const [personalInformation, syncServiceSettings, blockedCompanies] = await Promise.all([
+    getPersonalInformation(),
+    getSyncServiceSettings(),
+    listBlockedCompanies()
+  ]);
+
+  const payload = {
+    exported_at: new Date().toISOString(),
+    db_path: DB_PATH,
+    item: {
+      personal_information: personalInformation,
+      sync_settings: syncServiceSettings,
+      blocked_companies: blockedCompanies
+    }
+  };
+
+  if (includeMcpSettings) {
+    payload.item.mcp_settings = await getMcpSettings();
+  }
+
+  return payload;
 }
 
 async function getCompaniesForSync() {
@@ -17379,6 +17401,22 @@ function createServer() {
           blocked_companies_count: blockedCompanies.length,
           applications_count: Number(applications?.count || 0)
         }
+      });
+    } catch (error) {
+      res.status(400).json({
+        ok: false,
+        error: String(error?.message || error)
+      });
+    }
+  });
+
+  app.get("/settings/export", async (req, res) => {
+    try {
+      const includeMcpSettings = normalizeBoolean(req.query.include_mcp, true);
+      const payload = await buildSettingsExportPayload({ include_mcp: includeMcpSettings });
+      res.json({
+        ok: true,
+        ...payload
       });
     } catch (error) {
       res.status(400).json({

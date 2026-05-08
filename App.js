@@ -1,20 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppRegistry,
   FlatList,
   Image,
   Linking,
   Modal,
+  PermissionsAndroid,
   Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  StatusBar,
   Switch,
   Text,
   TextInput,
   View
 } from "react-native";
+import * as FileSystem from "expo-file-system/legacy";
 import {
   API_BASE_URL,
   blockCompany,
@@ -27,6 +31,7 @@ import {
   fetchPostingFilterOptions,
   fetchPersonalInformation,
   fetchPostings,
+  fetchSettingsExport,
   postFrontendLog,
   fetchSyncServiceSettings,
   fetchSyncStatus,
@@ -55,6 +60,88 @@ const PAGE_TITLES = {
   [PAGE_KEYS.SETTINGS_SYNC]: "Settings / Sync Settings",
   [PAGE_KEYS.SETTINGS_MCP]: "Settings / MCP Settings"
 };
+const IS_ANDROID = Platform.OS === "android";
+const ANDROID_STATUS_BAR_TOP_OFFSET = IS_ANDROID ? Math.max(0, Number(StatusBar.currentHeight || 0)) : 0;
+const ANDROID_BACKEND_TASK_BASE_NAME = "OpenPostingsBackendService";
+const ANDROID_BACKEND_TASK_REGISTRATION_COUNT = 16;
+const ANDROID_BACKEND_NOTIFICATION_OPTIONS = {
+  taskName: ANDROID_BACKEND_TASK_BASE_NAME,
+  taskTitle: "OpenPostings Backend Running",
+  taskDesc: "Sync service is active on this device.",
+  taskIcon: {
+    name: "ic_launcher",
+    type: "mipmap"
+  },
+  color: "#0b6e4f",
+  foregroundServiceType: ["dataSync"],
+  parameters: {
+    delayMs: 3000
+  }
+};
+let androidNodeRuntimeModule;
+let androidBackgroundServiceModule;
+
+function getAndroidNodeRuntime() {
+  if (!IS_ANDROID) return null;
+  if (androidNodeRuntimeModule !== undefined) return androidNodeRuntimeModule;
+  try {
+    androidNodeRuntimeModule = require("nodejs-mobile-react-native");
+  } catch {
+    androidNodeRuntimeModule = null;
+  }
+  return androidNodeRuntimeModule;
+}
+
+function getAndroidBackgroundService() {
+  if (!IS_ANDROID) return null;
+  if (androidBackgroundServiceModule !== undefined) return androidBackgroundServiceModule;
+  try {
+    const moduleValue = require("react-native-background-actions");
+    androidBackgroundServiceModule = moduleValue?.default || moduleValue;
+  } catch {
+    androidBackgroundServiceModule = null;
+  }
+  return androidBackgroundServiceModule;
+}
+
+function sleepAsync(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runAndroidBackendForegroundTask(parameters = {}) {
+  const delayMs = Math.max(1000, Number(parameters?.delayMs || 3000));
+  while (true) {
+    const backgroundService = getAndroidBackgroundService();
+    if (!backgroundService || !backgroundService.isRunning()) break;
+    await sleepAsync(delayMs);
+  }
+}
+
+function registerAndroidBackendHeadlessTasks() {
+  if (!IS_ANDROID) return;
+
+  const globalScope = globalThis;
+  if (globalScope.__openPostingsAndroidBackendTasksRegistered) return;
+
+  for (let index = 1; index <= ANDROID_BACKEND_TASK_REGISTRATION_COUNT; index += 1) {
+    const taskKey = `${ANDROID_BACKEND_TASK_BASE_NAME}${index}`;
+    AppRegistry.registerHeadlessTask(taskKey, () => runAndroidBackendForegroundTask);
+  }
+
+  globalScope.__openPostingsAndroidBackendTasksRegistered = true;
+}
+
+registerAndroidBackendHeadlessTasks();
+
+async function ensureAndroidNotificationPermission() {
+  if (!IS_ANDROID) return true;
+  if (Number(Platform.Version || 0) < 33) return true;
+  const permissionName = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+  const alreadyGranted = await PermissionsAndroid.check(permissionName);
+  if (alreadyGranted) return true;
+  const requestResult = await PermissionsAndroid.request(permissionName);
+  return requestResult === PermissionsAndroid.RESULTS.GRANTED;
+}
 
 const APPLICATION_STATUS_OPTIONS = [
   "applied",
@@ -1010,7 +1097,11 @@ function MultiSelectDropdown({
             autoCapitalize="none"
           />
 
-          <ScrollView style={styles.dropdownOptionsScroll}>
+          <ScrollView
+            style={styles.dropdownOptionsScroll}
+            nestedScrollEnabled={IS_ANDROID}
+            keyboardShouldPersistTaps="handled"
+          >
             {filteredOptions.length === 0 ? (
               <Text style={styles.dropdownEmpty}>{emptyText || "No matches."}</Text>
             ) : (
@@ -1056,7 +1147,11 @@ function SingleSelectDropdown({ label, options, selectedValue, onSelectValue, an
 
       {open ? (
         <View style={styles.dropdownPanel}>
-          <ScrollView style={styles.dropdownOptionsScroll}>
+          <ScrollView
+            style={styles.dropdownOptionsScroll}
+            nestedScrollEnabled={IS_ANDROID}
+            keyboardShouldPersistTaps="handled"
+          >
             <Pressable
               onPress={() => {
                 onSelectValue("all");
@@ -1171,10 +1266,11 @@ export default function App() {
   const [syncServiceSettingsLoading, setSyncServiceSettingsLoading] = useState(false);
   const [syncServiceSettingsSaving, setSyncServiceSettingsSaving] = useState(false);
   const [syncSettingsNotice, setSyncSettingsNotice] = useState("");
+  const [exportSettingsRunning, setExportSettingsRunning] = useState(false);
   const [migrationSourceDbPath, setMigrationSourceDbPath] = useState("");
   const [migrationSelection, setMigrationSelection] = useState({
     personal_information: true,
-    mcp_settings: true,
+    mcp_settings: !IS_ANDROID,
     blocked_companies: true,
     applications: true
   });
@@ -1197,8 +1293,14 @@ export default function App() {
   const frontendLogQueueRef = useRef([]);
   const frontendLogFlushInFlightRef = useRef(false);
   const lastFrontendLogFlushAtRef = useRef(0);
+  const androidBackendBootstrappedRef = useRef(false);
 
-  const pageTitle = PAGE_TITLES[activePage] || PAGE_TITLES[PAGE_KEYS.POSTINGS];
+  const effectiveActivePage =
+    IS_ANDROID &&
+    (activePage === PAGE_KEYS.SETTINGS_APPLICANTEE || activePage === PAGE_KEYS.SETTINGS_MCP)
+      ? PAGE_KEYS.POSTINGS
+      : activePage;
+  const pageTitle = PAGE_TITLES[effectiveActivePage] || PAGE_TITLES[PAGE_KEYS.POSTINGS];
   const flushFrontendLogs = useCallback(async () => {
     if (frontendLogFlushInFlightRef.current) return;
     if (frontendLogQueueRef.current.length === 0) return;
@@ -1246,6 +1348,68 @@ export default function App() {
     },
     [flushFrontendLogs]
   );
+
+  useEffect(() => {
+    if (!IS_ANDROID) return undefined;
+    if (androidBackendBootstrappedRef.current) return undefined;
+    androidBackendBootstrappedRef.current = true;
+
+    const nodejs = getAndroidNodeRuntime();
+    if (!nodejs) {
+      setError("Android backend runtime is unavailable. Install a development build and relaunch.");
+      return undefined;
+    }
+
+    const backgroundService = getAndroidBackgroundService();
+    let disposed = false;
+    let nodeListener;
+
+    try {
+      nodejs.start("main.js", { redirectOutputToLogcat: true });
+      nodeListener = nodejs.channel.addListener("message", (msg) => {
+        if (disposed) return;
+        if (!msg || typeof msg !== "object") return;
+        const eventType = String(msg.type || "");
+        if (!eventType) return;
+        queueFrontendLog("info", "android_node_message", `Android node event: ${eventType}`, {
+          type: eventType
+        });
+      });
+    } catch (errorValue) {
+      const message = String(errorValue?.message || errorValue);
+      setError(message);
+      queueFrontendLog("error", "android_node_start_failed", message, {});
+    }
+
+    if (backgroundService && !backgroundService.isRunning()) {
+      (async () => {
+        const permissionGranted = await ensureAndroidNotificationPermission();
+        if (!permissionGranted) {
+          queueFrontendLog(
+            "error",
+            "android_backend_notification_permission_missing",
+            "Notification permission denied; backend foreground service could not start.",
+            {}
+          );
+          return;
+        }
+        await backgroundService.start(runAndroidBackendForegroundTask, ANDROID_BACKEND_NOTIFICATION_OPTIONS);
+      })().catch((errorValue) => {
+        if (disposed) return;
+        const message = String(errorValue?.message || errorValue);
+        setError(message);
+        queueFrontendLog("error", "android_backend_foreground_start_failed", message, {});
+      });
+    }
+
+    return () => {
+      disposed = true;
+      if (nodeListener && typeof nodeListener.remove === "function") {
+        nodeListener.remove();
+      }
+    };
+  }, [queueFrontendLog]);
+
   const remoteFilterOptions = useMemo(
     () => [
       { value: "all", label: "All Locations" },
@@ -1362,7 +1526,13 @@ export default function App() {
   }, [postingsFilters.ats, postingFilterOptions.ats]);
 
   const navigateToPage = useCallback((page) => {
-    setActivePage(page);
+    const requestedPage = String(page || "");
+    const nextPage =
+      IS_ANDROID &&
+      (requestedPage === PAGE_KEYS.SETTINGS_APPLICANTEE || requestedPage === PAGE_KEYS.SETTINGS_MCP)
+        ? PAGE_KEYS.SETTINGS_SYNC
+        : page;
+    setActivePage(nextPage);
     setDrawerOpen(false);
   }, []);
 
@@ -1670,13 +1840,16 @@ export default function App() {
       });
       const summary = response?.summary || {};
 
-      await Promise.all([
+      const refreshTasks = [
         loadApplications({ silent: true }),
-        loadPersonalInformation({ silent: true }),
-        loadMcpSettings({ silent: true }),
         loadSyncServiceSettings({ silent: true }),
         loadBlockedCompanies({ silent: true })
-      ]);
+      ];
+      if (!IS_ANDROID) {
+        refreshTasks.push(loadPersonalInformation({ silent: true }));
+        refreshTasks.push(loadMcpSettings({ silent: true }));
+      }
+      await Promise.all(refreshTasks);
 
       const messageParts = ["Migration complete."];
       if (summary?.selected?.personal_information) {
@@ -1711,6 +1884,70 @@ export default function App() {
     loadPersonalInformation,
     loadSyncServiceSettings
   ]);
+
+  const handleExportSettings = useCallback(async () => {
+    setError("");
+    setMigrationNotice("");
+    setExportSettingsRunning(true);
+    try {
+      const response = await fetchSettingsExport({ include_mcp: !IS_ANDROID });
+      const fileTimestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const fileName = `openpostings-settings-${fileTimestamp}.json`;
+      const exportPayload = {
+        exported_at: response?.exported_at || new Date().toISOString(),
+        db_path: response?.db_path || "",
+        item: response?.item || {}
+      };
+      const fileContent = JSON.stringify(exportPayload, null, 2);
+
+      if (IS_ANDROID) {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (!permissions?.granted || !permissions?.directoryUri) {
+          setMigrationNotice("Export cancelled before selecting a destination folder.");
+          return;
+        }
+        const targetUri = await FileSystem.StorageAccessFramework.createFileAsync(
+          permissions.directoryUri,
+          fileName.replace(/\.json$/i, ""),
+          "application/json"
+        );
+        await FileSystem.writeAsStringAsync(targetUri, fileContent, {
+          encoding: FileSystem.EncodingType.UTF8
+        });
+        setMigrationNotice(`Settings exported to ${targetUri}`);
+        return;
+      }
+
+      if (Platform.OS === "web" && typeof window !== "undefined" && typeof document !== "undefined") {
+        const blob = new Blob([fileContent], { type: "application/json;charset=utf-8" });
+        const objectUrl = window.URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.URL.revokeObjectURL(objectUrl);
+        setMigrationNotice(`Settings export downloaded as ${fileName}`);
+        return;
+      }
+
+      const fallbackDocumentDirectory = FileSystem.documentDirectory;
+      if (!fallbackDocumentDirectory) {
+        throw new Error("No writable document directory is available for export.");
+      }
+      const fallbackPath = `${fallbackDocumentDirectory}${fileName}`;
+      await FileSystem.writeAsStringAsync(fallbackPath, fileContent, {
+        encoding: FileSystem.EncodingType.UTF8
+      });
+      setMigrationNotice(`Settings exported to ${fallbackPath}`);
+    } catch (e) {
+      setError(String(e.message || e));
+      setMigrationNotice("Settings export failed.");
+    } finally {
+      setExportSettingsRunning(false);
+    }
+  }, []);
 
   const handleSaveMcpSettings = useCallback(async () => {
     setError("");
@@ -2153,16 +2390,19 @@ export default function App() {
       setInitializing(true);
       setError("");
       try {
-        await Promise.all([
+        const bootstrapTasks = [
           loadPostings("", { filters: postingsFiltersRef.current }),
           loadStatus(),
-          loadPersonalInformation(),
           loadSyncServiceSettings(),
           loadBlockedCompanies(),
-          loadMcpSettings(),
           loadPostingFilterOptions(),
           loadApplications()
-        ]);
+        ];
+        if (!IS_ANDROID) {
+          bootstrapTasks.push(loadPersonalInformation());
+          bootstrapTasks.push(loadMcpSettings());
+        }
+        await Promise.all(bootstrapTasks);
       } catch (e) {
         setError(String(e.message || e));
       } finally {
@@ -2234,7 +2474,7 @@ export default function App() {
         const syncJustFinished = wasSyncRunningRef.current && !isRunning;
         wasSyncRunningRef.current = isRunning;
 
-        if (activePage !== PAGE_KEYS.POSTINGS) return;
+        if (effectiveActivePage !== PAGE_KEYS.POSTINGS) return;
         if (postingsRefreshInFlightRef.current) return;
 
         const now = Date.now();
@@ -2253,19 +2493,19 @@ export default function App() {
       }
     }, 3000);
     return () => clearInterval(id);
-  }, [activePage, loadPostings, loadStatus]);
+  }, [effectiveActivePage, loadPostings, loadStatus]);
 
   useEffect(() => {
-    if (activePage !== PAGE_KEYS.APPLICATIONS) return;
+    if (effectiveActivePage !== PAGE_KEYS.APPLICATIONS) return;
     loadApplications({ silent: false });
-  }, [activePage, loadApplications]);
+  }, [effectiveActivePage, loadApplications]);
 
   useEffect(() => {
-    if (activePage !== PAGE_KEYS.POSTINGS) return;
+    if (effectiveActivePage !== PAGE_KEYS.POSTINGS) return;
     loadStatus();
     loadSyncServiceSettings({ silent: true });
     loadPostingFilterOptions();
-  }, [activePage, loadStatus, loadSyncServiceSettings, loadPostingFilterOptions]);
+  }, [effectiveActivePage, loadStatus, loadSyncServiceSettings, loadPostingFilterOptions]);
 
   const renderPostingsPage = () => (
     <>
@@ -2776,6 +3016,15 @@ export default function App() {
             Migration is intentionally separated into a modal to avoid accidental taps while saving sync settings.
           </Text>
           <Pressable
+            onPress={handleExportSettings}
+            disabled={exportSettingsRunning}
+            style={[styles.settingsSecondaryButton, exportSettingsRunning ? styles.settingsSaveButtonDisabled : null]}
+          >
+            <Text style={styles.settingsSecondaryButtonText}>
+              {exportSettingsRunning ? "Exporting..." : "Export Current Settings"}
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={() => setMigrationModalOpen(true)}
             style={styles.settingsSecondaryButton}
           >
@@ -2840,7 +3089,9 @@ export default function App() {
                     key: "applications",
                     label: "Applications (includes application_attribution and posting_application_state)"
                   }
-                ].map((option) => {
+                ]
+                  .filter((option) => !IS_ANDROID || option.key !== "mcp_settings")
+                  .map((option) => {
                   const checked = Boolean(migrationSelection[option.key]);
                   return (
                     <Pressable
@@ -3161,16 +3412,18 @@ export default function App() {
   );
 
   const renderActivePage = () => {
-    if (activePage === PAGE_KEYS.APPLICATIONS) return renderApplicationsPage();
-    if (activePage === PAGE_KEYS.SETTINGS_APPLICANTEE) return renderApplicanteeSettingsPage();
-    if (activePage === PAGE_KEYS.SETTINGS_SYNC) return renderSyncSettingsPage();
-    if (activePage === PAGE_KEYS.SETTINGS_MCP) return renderMcpSettingsPage();
+    if (effectiveActivePage === PAGE_KEYS.APPLICATIONS) return renderApplicationsPage();
+    if (effectiveActivePage === PAGE_KEYS.SETTINGS_APPLICANTEE) return renderApplicanteeSettingsPage();
+    if (effectiveActivePage === PAGE_KEYS.SETTINGS_SYNC) return renderSyncSettingsPage();
+    if (effectiveActivePage === PAGE_KEYS.SETTINGS_MCP) return renderMcpSettingsPage();
     return renderPostingsPage();
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+      <View
+        style={[styles.header, IS_ANDROID ? { paddingTop: 12 + ANDROID_STATUS_BAR_TOP_OFFSET } : null]}
+      >
         <View style={styles.headerTopRow}>
           <Pressable
             onPress={() => setDrawerOpen((prev) => !prev)}
@@ -3181,17 +3434,19 @@ export default function App() {
             <Text style={styles.hamburgerIcon}>{"\u2630"}</Text>
           </Pressable>
           <View style={styles.headerLogoContainer}>
-            {activePage === PAGE_KEYS.POSTINGS ? (
+            {effectiveActivePage === PAGE_KEYS.POSTINGS ? (
               <Image source={require("./logo.png")} style={styles.headerLogo} resizeMode="contain" />
             ) : (
               <Text style={styles.title}>OpenPostings</Text>
             )}
           </View>
         </View>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.subtitle}>ATS postings ({Platform.OS})</Text>
-          <Text style={styles.small}>API: {API_BASE_URL}</Text>
-        </View>
+        {!IS_ANDROID ? (
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.subtitle}>ATS postings ({Platform.OS})</Text>
+            <Text style={styles.small}>API: {API_BASE_URL}</Text>
+          </View>
+        ) : null}
         <Text style={styles.pageTitle}>{pageTitle}</Text>
       </View>
 
@@ -3205,31 +3460,35 @@ export default function App() {
             <Text style={styles.drawerHeading}>Navigation</Text>
             <DrawerItem
               label="Postings"
-              selected={activePage === PAGE_KEYS.POSTINGS}
+              selected={effectiveActivePage === PAGE_KEYS.POSTINGS}
               onPress={() => navigateToPage(PAGE_KEYS.POSTINGS)}
             />
             <DrawerItem
               label="Applications"
-              selected={activePage === PAGE_KEYS.APPLICATIONS}
+              selected={effectiveActivePage === PAGE_KEYS.APPLICATIONS}
               onPress={handleOpenApplicationsPage}
             />
 
             <Text style={styles.drawerHeading}>Settings</Text>
-            <DrawerItem
-              label="Applicantee Information"
-              selected={activePage === PAGE_KEYS.SETTINGS_APPLICANTEE}
-              onPress={() => navigateToPage(PAGE_KEYS.SETTINGS_APPLICANTEE)}
-            />
+            {!IS_ANDROID ? (
+              <DrawerItem
+                label="Applicantee Information"
+                selected={effectiveActivePage === PAGE_KEYS.SETTINGS_APPLICANTEE}
+                onPress={() => navigateToPage(PAGE_KEYS.SETTINGS_APPLICANTEE)}
+              />
+            ) : null}
             <DrawerItem
               label="Sync Settings"
-              selected={activePage === PAGE_KEYS.SETTINGS_SYNC}
+              selected={effectiveActivePage === PAGE_KEYS.SETTINGS_SYNC}
               onPress={() => navigateToPage(PAGE_KEYS.SETTINGS_SYNC)}
             />
-            <DrawerItem
-              label="MCP Settings"
-              selected={activePage === PAGE_KEYS.SETTINGS_MCP}
-              onPress={() => navigateToPage(PAGE_KEYS.SETTINGS_MCP)}
-            />
+            {!IS_ANDROID ? (
+              <DrawerItem
+                label="MCP Settings"
+                selected={effectiveActivePage === PAGE_KEYS.SETTINGS_MCP}
+                onPress={() => navigateToPage(PAGE_KEYS.SETTINGS_MCP)}
+              />
+            ) : null}
           </View>
         </View>
       ) : null}

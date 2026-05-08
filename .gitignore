@@ -1,7 +1,6 @@
 node_modules
 # React Native
 ios/
-android/
 *.keystore
 *.jks
 *.p8
@@ -63,7 +62,33 @@ public/static/
 .expo/
 .expo-shared/
 
+# Android native build artifacts
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/local.properties
+android/.cxx/
+android/app/.cxx/
+
+# Embedded Android Node runtime bundle (generated)
+nodejs-assets/
+
 # Extra
 /db_*
 *.db-shm
 *.db-wal
+
+# Local throwaway logs
+crashlog.txt
+
+# Android signing secrets (never commit)
+android/key.properties
+android/keystore.properties
+android/app/*.jks
+android/app/*.keystore
+
+# Local release artifacts
+android/app/build/outputs/
+*.apk
+*.aab
