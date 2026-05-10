@@ -5,6 +5,7 @@ const sidebars = {
   docsSidebar: [
     "intro",
     "install",
+    "chrome-extension-seeded-url-capture",
     "applying-for-jobs",
     "filtering-jobs",
     "sync-settings",

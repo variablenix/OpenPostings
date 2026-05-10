@@ -1,5 +1,5 @@
 ﻿---
-sidebar_position: 6
+sidebar_position: 7
 title: MCP / AI Engine Settings
 description: Configure the MCP application agent, safety controls, credentials, and targeting preferences.
 ---

@@ -1,5 +1,5 @@
 ﻿---
-sidebar_position: 8
+sidebar_position: 9
 title: Windows Tray Notification Settings
 description: Understand and control the OpenPostings backend tray process on Windows.
 ---

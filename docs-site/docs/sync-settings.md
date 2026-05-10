@@ -1,5 +1,5 @@
 ﻿---
-sidebar_position: 5
+sidebar_position: 6
 title: Sync Settings
 description: Configure automatic sync, network constraints, queue concurrency, and blocked companies.
 ---

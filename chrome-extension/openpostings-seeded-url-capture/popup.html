@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenPostings Seeded URL Capture</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>OpenPostings</h1>
+      <p class="subtitle">Seeded ATS URL capture</p>
+
+      <label class="field">
+        <span>Backend API URL</span>
+        <input id="backendUrl" type="text" value="http://localhost:8787" />
+      </label>
+
+      <label class="field">
+        <span>Current / Source URL</span>
+        <textarea id="sourceUrl" rows="3" placeholder="https://..."></textarea>
+      </label>
+
+      <button id="classifyBtn" class="btn secondary" type="button">Check URL</button>
+
+      <section class="result" id="resultBox">
+        <div><strong>Match:</strong> <span id="matchState">Not checked</span></div>
+        <div><strong>ATS:</strong> <span id="atsValue">-</span></div>
+        <div><strong>Identifier:</strong> <span id="identifierValue">-</span></div>
+      </section>
+
+      <label class="field">
+        <span>Company Name</span>
+        <input id="companyName" type="text" placeholder="Company name" />
+      </label>
+
+      <button id="addBtn" class="btn primary" type="button" disabled>Add to OpenPostings</button>
+
+      <p id="message" class="message"></p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
+

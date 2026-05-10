@@ -829,6 +829,23 @@ const ATS_FILTER_OPTION_ITEMS = Object.freeze([
   { value: "ultipro", label: "UltiPro" },
   { value: "taleo", label: "Taleo" }
 ]);
+const DYNAMIC_ATS_OPTIONS = new Set([
+  "governmentjobs",
+  "smartrecruiters",
+  "policeapp",
+  "usajobs",
+  "k12jobspot",
+  "schoolspring",
+  "calcareers",
+  "calopps",
+  "statejobsny",
+  "edjoin",
+  "webcruiter",
+  "academicjobsonline"
+]);
+const SEEDED_ATS_OPTIONS = new Set(
+  Array.from(ATS_FILTER_OPTIONS).filter((ats) => !DYNAMIC_ATS_OPTIONS.has(String(ats || "").trim().toLowerCase()))
+);
 const SYNC_DEFAULT_ENABLED_ATS = Object.freeze(ATS_FILTER_OPTION_ITEMS.map((item) => item.value));
 const POSTING_SORT_OPTIONS = new Set(["recent", "company_asc"]);
 const MCP_SETTINGS_DEFAULTS = {
@@ -2482,6 +2499,338 @@ function parseUrl(urlString) {
   } catch {
     return null;
   }
+}
+
+function normalizeSourceUrlString(urlString) {
+  const raw = String(urlString || "").trim();
+  if (!raw) return "";
+  const direct = parseUrl(raw);
+  if (direct) return direct.toString();
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return "";
+  const withScheme = parseUrl(`https://${raw}`);
+  return withScheme ? withScheme.toString() : "";
+}
+
+function parseApplitrackCompanySource(urlString) {
+  try {
+    const siteRoot = normalizeApplitrackUrl(urlString);
+    return siteRoot ? { siteRoot } : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseWorkdaySeededCompanySource(urlString) {
+  const parsed = parseUrl(urlString);
+  const host = String(parsed?.hostname || "").toLowerCase();
+  if (!host.endsWith("myworkdayjobs.com")) return null;
+  return parseWorkdayCompany(urlString);
+}
+
+function parseAshbySeededCompanySource(urlString) {
+  const parsed = parseUrl(urlString);
+  const host = String(parsed?.hostname || "").toLowerCase();
+  if (host !== "jobs.ashbyhq.com") return null;
+  return parseAshbyCompany(urlString);
+}
+
+function parseGreenhouseSeededCompanySource(urlString) {
+  const parsed = parseUrl(urlString);
+  const host = String(parsed?.hostname || "").toLowerCase();
+  if (host !== "job-boards.greenhouse.io" && host !== "boards.greenhouse.io") return null;
+  return parseGreenhouseCompany(urlString);
+}
+
+function parseLeverSeededCompanySource(urlString) {
+  const parsed = parseUrl(urlString);
+  const host = String(parsed?.hostname || "").toLowerCase();
+  if (host !== "jobs.lever.co") return null;
+  return parseLeverCompany(urlString);
+}
+
+function parseAvatureSeededCompanySource(urlString) {
+  const parsed = parseUrl(urlString);
+  const pathLower = String(parsed?.pathname || "").toLowerCase();
+  if (!pathLower.includes("/careers/searchjobs") && !pathLower.includes("/careers/jobdetail/")) return null;
+  return parseAvatureCompany(urlString);
+}
+
+const SEEDED_COMPANY_SOURCE_PARSER_BY_ATS = Object.freeze({
+  workday: parseWorkdaySeededCompanySource,
+  ashby: parseAshbySeededCompanySource,
+  greenhouse: parseGreenhouseSeededCompanySource,
+  lever: parseLeverSeededCompanySource,
+  recruitee: parseRecruiteeCompany,
+  ultipro: parseUltiProCompany,
+  taleo: parseTaleoCompany,
+  jobvite: parseJobviteCompany,
+  applicantpro: parseApplicantProCompany,
+  applytojob: parseApplyToJobCompany,
+  icims: parseIcimsCompany,
+  theapplicantmanager: parseTheApplicantManagerCompany,
+  breezy: parseBreezyCompany,
+  zoho: parseZohoCompany,
+  applicantai: parseApplicantAiCompany,
+  careerplug: parseCareerplugCompany,
+  bamboohr: parseBambooHrCompany,
+  manatal: parseManatalCompany,
+  careerpuck: parseCareerpuckCompany,
+  fountain: parseFountainCompany,
+  getro: parseGetroCompany,
+  hrmdirect: parseHrmDirectCompany,
+  talentlyft: parseTalentlyftCompany,
+  talexio: parseTalexioCompany,
+  teamtailor: parseTeamtailorCompany,
+  freshteam: parseFreshteamCompany,
+  agilehr: parseAgilehrCompany,
+  sagehr: parseSagehrCompany,
+  loxo: parseLoxoCompany,
+  peopleforce: parsePeopleforceCompany,
+  simplicant: parseSimplicantCompany,
+  pinpointhq: parsePinpointHqCompany,
+  recruitcrm: parseRecruitCrmCompany,
+  rippling: parseRipplingCompany,
+  gem: parseGemCompany,
+  jobaps: parseJobApsCompany,
+  join: parseJoinCompany,
+  talentreef: parseTalentreefCompany,
+  saphrcloud: parseSapHrCloudCompany,
+  adp_myjobs: parseAdpMyjobsCompany,
+  paycomonline: parsePaycomonlineCompany,
+  adp_workforcenow: parseAdpWorkforcenowCompany,
+  careerspage: parseCareerspageCompany,
+  oracle: parseOracleCompany,
+  paylocity: parsePaylocityCompany,
+  eightfold: parseEightfoldCompany,
+  hirebridge: parseHirebridgeCompany,
+  pageup: parsePageupCompany,
+  brassring: parseBrassringCompany,
+  applitrack: parseApplitrackCompanySource,
+  hibob: parseHibobCompany,
+  isolvisolvedhire: parseIsolvisolvedhireCompany,
+  avature: parseAvatureSeededCompanySource,
+  comeet: parseComeetCompany,
+  factorialhr: parseFactorialhrCompany,
+  hireology: parseHireologyCompany,
+  crelate: parseCrelateCompany,
+  hiringplatform: parseHiringplatformCompany,
+  homerun: parseHomerunCompany,
+  jibeapply: parseJibeapplyCompany,
+  jobs2web: parseJobs2webCompany,
+  occupop: parseOccupopCompany,
+  peopleadmin: parsePeopleadminCompany,
+  personio: parsePersonioCompany,
+  recruiterflow: parseRecruiterflowCompany,
+  softgarden: parseSoftgardenCompany,
+  trakstar: parseTrakstarCompany,
+  ukg: parseUkgCompany,
+  ycombinator: parseYcombinatorCompany,
+  yello: parseYelloCompany
+});
+
+const ATS_LABEL_BY_VALUE = new Map(
+  ATS_FILTER_OPTION_ITEMS.map((item) => [String(item?.value || "").trim().toLowerCase(), String(item?.label || "").trim()])
+);
+
+function isParserFieldValue(value) {
+  return typeof value === "string" || typeof value === "number";
+}
+
+function isLikelyUrlFieldKey(fieldName) {
+  const lower = String(fieldName || "").trim().toLowerCase();
+  if (!lower) return false;
+  return (
+    lower.endsWith("url") ||
+    lower.includes("origin") ||
+    lower.includes("base") ||
+    lower.includes("host") ||
+    lower === "finder"
+  );
+}
+
+function getCanonicalSeededSourceUrl(parsedConfig, fallbackUrl) {
+  const config = parsedConfig && typeof parsedConfig === "object" ? parsedConfig : {};
+  const candidateKeys = [
+    "boardUrl",
+    "jobsUrl",
+    "searchUrl",
+    "companyBaseUrl",
+    "baseSectionUrl",
+    "baseBoardUrl",
+    "careersUrl",
+    "applyUrl",
+    "portalUrl",
+    "publicJobsUrl",
+    "siteRoot",
+    "baseUrl"
+  ];
+  for (const key of candidateKeys) {
+    const value = String(config?.[key] || "").trim();
+    if (!value) continue;
+    const normalized = normalizeSourceUrlString(value);
+    if (normalized) return normalized;
+  }
+  return normalizeSourceUrlString(fallbackUrl);
+}
+
+function extractSeededCompanyIdentifier(parsedConfig) {
+  const config = parsedConfig && typeof parsedConfig === "object" ? parsedConfig : {};
+
+  const compoundIdentifiers = [
+    { key: "cid+ccId", values: ["cid", "ccId"], separator: ":" },
+    { key: "partnerId+siteId", values: ["partnerId", "siteId"], separator: ":" }
+  ];
+  for (const identifier of compoundIdentifiers) {
+    const values = identifier.values
+      .map((field) => String(config?.[field] ?? "").trim())
+      .filter(Boolean);
+    if (values.length === identifier.values.length) {
+      return { key: identifier.key, value: values.join(identifier.separator) };
+    }
+  }
+
+  const preferredKeys = [
+    "companyIdRaw",
+    "companyId",
+    "organizationHostedJobsPageName",
+    "boardToken",
+    "organization",
+    "companySlug",
+    "subdomain",
+    "companySubdomain",
+    "companyName",
+    "clientKey",
+    "boardId",
+    "tenant",
+    "careerSection",
+    "boardSlug",
+    "domainSlug",
+    "account",
+    "slug",
+    "companyCode",
+    "siteNumber"
+  ];
+  for (const key of preferredKeys) {
+    if (!isParserFieldValue(config?.[key])) continue;
+    const value = String(config[key]).trim();
+    if (!value) continue;
+    return { key, value };
+  }
+
+  for (const [key, rawValue] of Object.entries(config)) {
+    if (!isParserFieldValue(rawValue)) continue;
+    if (isLikelyUrlFieldKey(key)) continue;
+    const value = String(rawValue).trim();
+    if (!value) continue;
+    return { key, value };
+  }
+
+  return { key: "url", value: "" };
+}
+
+function toSeededParserPreviewFields(parsedConfig) {
+  const config = parsedConfig && typeof parsedConfig === "object" ? parsedConfig : {};
+  const fields = {};
+  for (const [key, rawValue] of Object.entries(config)) {
+    if (!isParserFieldValue(rawValue)) continue;
+    if (isLikelyUrlFieldKey(key)) continue;
+    const value = String(rawValue).trim();
+    if (!value) continue;
+    fields[key] = value;
+  }
+  return fields;
+}
+
+function buildSuggestedCompanyName(ats, identifierValue) {
+  const label = ATS_LABEL_BY_VALUE.get(String(ats || "").trim().toLowerCase()) || String(ats || "").trim();
+  const identifier = String(identifierValue || "").trim();
+  if (!identifier) return label || "Company";
+  return identifier.replace(/[_-]+/g, " ").trim() || label || "Company";
+}
+
+function listSeededAtsValues() {
+  const parserSupported = new Set(Object.keys(SEEDED_COMPANY_SOURCE_PARSER_BY_ATS));
+  return Array.from(SEEDED_ATS_OPTIONS)
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter((value) => parserSupported.has(value))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function classifySeededCompanySourceUrl(urlString) {
+  const normalizedUrl = normalizeSourceUrlString(urlString);
+  if (!normalizedUrl) {
+    return {
+      supported: false,
+      reason: "invalid_url",
+      message: "URL is invalid or missing a supported protocol.",
+      normalized_url: ""
+    };
+  }
+
+  const inferredAts = normalizeAtsFilterValue(inferAtsFromJobPostingUrl(normalizedUrl));
+  if (DYNAMIC_ATS_OPTIONS.has(inferredAts)) {
+    return {
+      supported: false,
+      reason: "dynamic_ats_not_supported",
+      message: "Dynamic ATS URLs are not supported by this extension.",
+      normalized_url: normalizedUrl,
+      ats: inferredAts
+    };
+  }
+
+  const parserEntries = [];
+  if (inferredAts && SEEDED_COMPANY_SOURCE_PARSER_BY_ATS[inferredAts]) {
+    parserEntries.push([inferredAts, SEEDED_COMPANY_SOURCE_PARSER_BY_ATS[inferredAts]]);
+  }
+  for (const [ats, parser] of Object.entries(SEEDED_COMPANY_SOURCE_PARSER_BY_ATS)) {
+    if (parserEntries.some((entry) => entry[0] === ats)) continue;
+    parserEntries.push([ats, parser]);
+  }
+
+  for (const [ats, parser] of parserEntries) {
+    let parsedConfig = null;
+    try {
+      parsedConfig = parser(normalizedUrl);
+    } catch {
+      parsedConfig = null;
+    }
+    if (!parsedConfig) continue;
+
+    const identifier = extractSeededCompanyIdentifier(parsedConfig);
+    const canonicalUrl = getCanonicalSeededSourceUrl(parsedConfig, normalizedUrl);
+    const parserFields = toSeededParserPreviewFields(parsedConfig);
+    const suggestedCompanyName = buildSuggestedCompanyName(ats, identifier.value);
+
+    return {
+      supported: true,
+      reason: "seeded_match",
+      normalized_url: normalizedUrl,
+      canonical_url: canonicalUrl || normalizedUrl,
+      ats,
+      ats_label: ATS_LABEL_BY_VALUE.get(ats) || ats,
+      company_identifier: identifier.value,
+      company_identifier_key: identifier.key,
+      parsed_fields: parserFields,
+      suggested_company_name: suggestedCompanyName
+    };
+  }
+
+  if (inferredAts && SEEDED_ATS_OPTIONS.has(inferredAts)) {
+    return {
+      supported: false,
+      reason: "seeded_parser_not_available",
+      message: `Seeded ATS '${inferredAts}' is recognized but no company source parser is available for this URL shape.`,
+      normalized_url: normalizedUrl,
+      ats: inferredAts
+    };
+  }
+
+  return {
+    supported: false,
+    reason: "unrecognized_or_not_seeded",
+    message: "URL does not match a supported seeded ATS company source.",
+    normalized_url: normalizedUrl
+  };
 }
 
 function pickCompanyId(pathParts, subdomain) {
@@ -16670,6 +17019,57 @@ async function getCompaniesForSync() {
     });
 }
 
+async function upsertSeededCompanySource(targetDb, payload = {}) {
+  const companyName = String(payload?.company_name || "").trim();
+  const sourceUrl = String(payload?.url_string || "").trim();
+  const atsName = String(payload?.ATS_name || "").trim().toLowerCase();
+  if (!sourceUrl) {
+    throw new Error("Source URL is required.");
+  }
+  if (!companyName) {
+    throw new Error("Company name is required.");
+  }
+  if (!atsName) {
+    throw new Error("ATS name is required.");
+  }
+
+  const existingRow = await targetDb.get(
+    `
+      SELECT id, company_name, url_string, ATS_name
+      FROM companies
+      WHERE url_string = ?
+      LIMIT 1;
+    `,
+    [sourceUrl]
+  );
+
+  await targetDb.run(
+    `
+      INSERT INTO companies (company_name, url_string, ATS_name)
+      VALUES (?, ?, ?)
+      ON CONFLICT(url_string) DO UPDATE SET
+        company_name = excluded.company_name,
+        ATS_name = excluded.ATS_name;
+    `,
+    [companyName, sourceUrl, atsName]
+  );
+
+  const row = await targetDb.get(
+    `
+      SELECT id, company_name, url_string, ATS_name
+      FROM companies
+      WHERE url_string = ?
+      LIMIT 1;
+    `,
+    [sourceUrl]
+  );
+
+  return {
+    row,
+    action: existingRow ? "updated" : "inserted"
+  };
+}
+
 async function upsertPostings(postings, lastSeenEpoch) {
   if (!Array.isArray(postings) || postings.length === 0) return;
   const seenEpoch = Number(lastSeenEpoch || nowEpochSeconds());
@@ -17140,6 +17540,95 @@ function createServer() {
       db_path: DB_PATH,
       ...counts
     });
+  });
+
+  app.get("/extension/seeded-source/options", async (_req, res) => {
+    const seededAts = listSeededAtsValues().map((value) => ({
+      value,
+      label: ATS_LABEL_BY_VALUE.get(value) || value
+    }));
+    res.json({
+      ok: true,
+      item: {
+        seeded_ats: seededAts,
+        dynamic_ats: Array.from(DYNAMIC_ATS_OPTIONS).sort((a, b) => a.localeCompare(b))
+      }
+    });
+  });
+
+  app.post("/extension/seeded-source/classify", async (req, res) => {
+    const sourceUrl = String(req.body?.url_string || req.body?.url || "").trim();
+    if (!sourceUrl) {
+      return res.status(400).json({
+        ok: false,
+        error: "Source URL is required."
+      });
+    }
+
+    const item = classifySeededCompanySourceUrl(sourceUrl);
+    return res.json({
+      ok: true,
+      item
+    });
+  });
+
+  app.post("/extension/seeded-source/upsert", async (req, res) => {
+    try {
+      const sourceUrlInput = String(req.body?.url_string || req.body?.url || "").trim();
+      if (!sourceUrlInput) {
+        throw new Error("Source URL is required.");
+      }
+
+      const classification = classifySeededCompanySourceUrl(sourceUrlInput);
+      if (!classification.supported) {
+        throw new Error(
+          String(classification?.message || "URL does not match a supported seeded ATS company source.")
+        );
+      }
+      if (!SEEDED_ATS_OPTIONS.has(classification.ats)) {
+        throw new Error("Only seeded ATS sources can be added.");
+      }
+      if (DYNAMIC_ATS_OPTIONS.has(classification.ats)) {
+        throw new Error("Dynamic ATS sources are not supported.");
+      }
+
+      const normalizedUrl = normalizeSourceUrlString(classification.canonical_url || sourceUrlInput);
+      if (!normalizedUrl) {
+        throw new Error("Source URL is invalid.");
+      }
+
+      const fallbackCompanyName =
+        String(classification.suggested_company_name || "").trim() ||
+        String(classification.company_identifier || "").trim() ||
+        "Company";
+      const companyName = String(req.body?.company_name || fallbackCompanyName).trim();
+      if (!companyName) {
+        throw new Error("Company name is required.");
+      }
+
+      const result = await upsertSeededCompanySource(db, {
+        company_name: companyName,
+        url_string: normalizedUrl,
+        ATS_name: classification.ats
+      });
+
+      return res.json({
+        ok: true,
+        item: {
+          id: Number(result?.row?.id || 0),
+          company_name: String(result?.row?.company_name || companyName),
+          url_string: String(result?.row?.url_string || normalizedUrl),
+          ATS_name: String(result?.row?.ATS_name || classification.ats),
+          action: String(result?.action || "updated"),
+          classification
+        }
+      });
+    } catch (error) {
+      return res.status(400).json({
+        ok: false,
+        error: String(error?.message || error)
+      });
+    }
   });
 
   app.get("/sync/status", async (_req, res) => {
@@ -17788,7 +18277,19 @@ async function start() {
   }, SYNC_INTERVAL_MS);
 }
 
-start().catch((error) => {
-  console.error("[OpenPostings API] startup failed:", error);
-  process.exit(1);
-});
+if (require.main === module) {
+  start().catch((error) => {
+    console.error("[OpenPostings API] startup failed:", error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  classifySeededCompanySourceUrl,
+  listSeededAtsValues,
+  normalizeSourceUrlString,
+  DYNAMIC_ATS_OPTIONS,
+  SEEDED_ATS_OPTIONS,
+  createServer,
+  start
+};
