@@ -1,0 +1,121 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 360px;
+  background: #f4f7fb;
+  color: #1e2a36;
+}
+
+.app {
+  padding: 14px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.subtitle {
+  margin: 2px 0 12px;
+  color: #5b6b7a;
+  font-size: 12px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.field span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+input,
+textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #c9d3de;
+  border-radius: 8px;
+  padding: 8px;
+  font: inherit;
+  font-size: 13px;
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.btn {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn.secondary {
+  margin-bottom: 10px;
+  background: #2f8ae6;
+  color: #fff;
+}
+
+.btn.secondary:hover {
+  background: #1f7cd9;
+}
+
+.btn.secondary:active {
+  background: #176dc2;
+}
+
+.btn.secondary:disabled {
+  background: #1f7cd9;
+  color: #fff;
+  opacity: 1;
+  cursor: progress;
+}
+
+.btn.primary {
+  background: #1b78d6;
+  color: #fff;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.result {
+  margin-bottom: 10px;
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.message {
+  min-height: 18px;
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+
+.message.error {
+  color: #9b1d1d;
+}
+
+.message.success {
+  color: #136a2f;
+}
+

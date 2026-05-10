@@ -1,5 +1,5 @@
 ﻿---
-sidebar_position: 7
+sidebar_position: 8
 title: Applicantee AI Settings
 description: Configure reusable applicantee profile information used by OpenPostings and AI workflows.
 ---

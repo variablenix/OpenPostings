@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "OpenPostings Seeded URL Capture",
+  "description": "Capture the current tab as a seeded ATS company source in OpenPostings.",
+  "version": "0.1.0",
+  "permissions": ["tabs", "storage"],
+  "host_permissions": [
+    "http://localhost:8787/*",
+    "http://127.0.0.1:8787/*"
+  ],
+  "action": {
+    "default_title": "OpenPostings Seeded URL Capture",
+    "default_popup": "popup.html"
+  }
+}
+

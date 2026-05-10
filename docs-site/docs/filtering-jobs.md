@@ -1,5 +1,5 @@
 ﻿---
-sidebar_position: 4
+sidebar_position: 5
 title: Filtering Jobs
 description: Narrow postings by ATS, industry, geography, remote mode, and date availability.
 ---

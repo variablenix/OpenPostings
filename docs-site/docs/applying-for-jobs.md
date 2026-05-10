@@ -1,5 +1,5 @@
 ﻿---
-sidebar_position: 3
+sidebar_position: 4
 title: Applying for Jobs
 description: Use Postings and Applications pages to track, ignore, and block jobs/companies.
 ---

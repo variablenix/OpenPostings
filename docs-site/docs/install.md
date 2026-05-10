@@ -4,7 +4,14 @@ title: Install (MSI and Source)
 description: Install OpenPostings using the Windows MSI installer or from source.
 ---
 
-## Option 1: Windows MSI installer (Easiest Setup But Still WIP and may have some bugs)
+## Android Option: Android APK Installer and Google Store Beta 
+You can download the latest app from the github releases page and run it. 
+
+- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.7/app-release.apk
+
+If you would like to one of the beta testers to help get this on the google play store, fill out this form: https://docs.google.com/forms/d/e/1FAIpQLSdVGhp667EiEB3Cxxc4KA8GTZzZ1CHtiAql4AOIA076W4RYsg/viewform?usp=dialog Within 24 hours you will receive an email confirming that your google account has been added to the closed beta and it will give you the access url to access the beta directly on your Android device. 
+
+## Windows Option: Windows MSI installer (Easiest Setup But Still WIP and may have some bugs)
 
 ### 1. Download installer
 
@@ -44,7 +51,7 @@ Feature payloads:
 
 If backend service worker is installed, the installer writes a startup entry that launches the backend tray process on sign-in.
 
-## Option 2: Run from source (Best Stability & Compatibility)
+## Source Option: Run from source (Best Stability & Compatibility)
 
 ### Requirements
 
