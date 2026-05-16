@@ -1723,11 +1723,13 @@ export default function App() {
 
   const runSync = useCallback(async () => {
     setError("");
+    setSyncing(true);
     try {
       await triggerWorkdaySync(false);
       await loadStatus();
     } catch (e) {
       setError(String(e.message || e));
+      setSyncing(false);
     }
   }, [loadStatus]);
 

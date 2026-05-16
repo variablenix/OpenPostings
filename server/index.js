@@ -17717,10 +17717,23 @@ async function upsertSeededCompanySource(targetDb, payload = {}) {
   };
 }
 
-async function upsertPostings(postings, lastSeenEpoch) {
-  if (!Array.isArray(postings) || postings.length === 0) return;
-  const seenEpoch = Number(lastSeenEpoch || nowEpochSeconds());
+function isRecoverablePostingStorageError(error) {
+  const message = String(error?.message || error || "");
+  if (!message) return false;
+  return (
+    /SQLITE_CORRUPT/i.test(message) ||
+    /database disk image is malformed/i.test(message) ||
+    /SQLITE_BUSY/i.test(message) ||
+    /database is locked/i.test(message)
+  );
+}
 
+async function rebuildPostingsTableStorage() {
+  await db.exec(`DROP TABLE IF EXISTS Postings;`);
+  await createCanonicalPostingsTable();
+}
+
+async function upsertPostingsBatch(postings, seenEpoch) {
   await db.exec("BEGIN TRANSACTION;");
   try {
     for (const posting of postings) {
@@ -17752,20 +17765,27 @@ async function upsertPostings(postings, lastSeenEpoch) {
             last_seen_epoch = excluded.last_seen_epoch
           WHERE COALESCE(Postings.hidden, 0) = 0;
         `,
-        [
-          companyName,
-          positionName,
-          jobPostingUrl,
-          postingDate,
-          seenEpoch,
-          seenEpoch
-        ]
+        [companyName, positionName, jobPostingUrl, postingDate, seenEpoch, seenEpoch]
       );
     }
     await db.exec("COMMIT;");
   } catch (error) {
     await db.exec("ROLLBACK;");
     throw error;
+  }
+}
+
+async function upsertPostings(postings, lastSeenEpoch) {
+  if (!Array.isArray(postings) || postings.length === 0) return;
+  const seenEpoch = Number(lastSeenEpoch || nowEpochSeconds());
+  try {
+    await upsertPostingsBatch(postings, seenEpoch);
+  } catch (error) {
+    if (!isRecoverablePostingStorageError(error)) {
+      throw error;
+    }
+    await rebuildPostingsTableStorage();
+    await upsertPostingsBatch(postings, seenEpoch);
   }
 }
 
@@ -17984,13 +18004,29 @@ async function runWorkdaySyncInternal() {
     }
 
     syncStatus.progress.total = syncTargets.length;
-    let totalPruned = await pruneExpiredPostings(syncReferenceEpoch);
-    let postingDatePruned = await prunePostingsOutsideDateWindow(syncReferenceEpoch);
+    const errors = [];
+    let totalPruned = 0;
+    let postingDatePruned = 0;
+    try {
+      totalPruned = await pruneExpiredPostings(syncReferenceEpoch);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `pruneExpiredPostings failed: ${String(error?.message || error)}`
+      });
+    }
+    try {
+      postingDatePruned = await prunePostingsOutsideDateWindow(syncReferenceEpoch);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `prunePostingsOutsideDateWindow failed: ${String(error?.message || error)}`
+      });
+    }
     const nextPostingLocationByJobUrl = new Map(postingLocationByJobUrl);
 
     const dedupedPostings = new Map();
     const pendingPostingsForUpsert = [];
-    const errors = [];
     let excludedByPostingDate = 0;
     let nextCompanyIndex = 0;
     let completedCompanies = 0;
@@ -18050,7 +18086,14 @@ async function runWorkdaySyncInternal() {
           });
         } finally {
           if (pendingPostingsForUpsert.length >= SYNC_POSTING_FLUSH_BATCH_SIZE) {
-            await queueFlushPendingPostings(false);
+            try {
+              await queueFlushPendingPostings(false);
+            } catch (error) {
+              errors.push({
+                company_name: "__system__",
+                message: `queueFlushPendingPostings failed: ${String(error?.message || error)}`
+              });
+            }
           }
           completedCompanies += 1;
           syncStatus.progress = {
@@ -18067,12 +18110,45 @@ async function runWorkdaySyncInternal() {
       await Promise.all(Array.from({ length: workerCount }, () => runSyncWorker()));
     }
 
-    await queueFlushPendingPostings(true);
+    try {
+      await queueFlushPendingPostings(true);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `final queueFlushPendingPostings failed: ${String(error?.message || error)}`
+      });
+    }
 
-    totalPruned += await pruneExpiredPostings(syncReferenceEpoch);
-    postingDatePruned += await prunePostingsOutsideDateWindow(syncReferenceEpoch);
+    try {
+      totalPruned += await pruneExpiredPostings(syncReferenceEpoch);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `post-sync pruneExpiredPostings failed: ${String(error?.message || error)}`
+      });
+    }
+    try {
+      postingDatePruned += await prunePostingsOutsideDateWindow(syncReferenceEpoch);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `post-sync prunePostingsOutsideDateWindow failed: ${String(error?.message || error)}`
+      });
+    }
     postingLocationByJobUrl = nextPostingLocationByJobUrl;
-    const syncScopeStats = await getSyncScopeStats();
+    let syncScopeStats = {
+      sync_enabled_company_count: 0,
+      configured_enabled_ats_count: 0,
+      excluded_ats_count: 0
+    };
+    try {
+      syncScopeStats = await getSyncScopeStats();
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `getSyncScopeStats failed: ${String(error?.message || error)}`
+      });
+    }
 
     syncStatus.last_sync_at = new Date().toISOString();
     syncStatus.last_sync_summary = {
@@ -18103,8 +18179,11 @@ function runWorkdaySync() {
   return syncPromise;
 }
 
-async function getCounts() {
-  await pruneExpiredPostings();
+async function getCounts(options = {}) {
+  const skipPrune = Boolean(options?.skipPrune);
+  if (!skipPrune) {
+    await pruneExpiredPostings();
+  }
   const companyRow = await db.get(`SELECT COUNT(*) AS count FROM companies;`);
   const postingRow = await db.get(
     `
@@ -18279,21 +18358,35 @@ function createServer() {
   });
 
   app.get("/sync/status", async (_req, res) => {
-    const [counts, syncScopeStats, syncSettings] = await Promise.all([
-      getCounts(),
-      getSyncScopeStats(),
-      getSyncServiceSettings()
-    ]);
-    const payload = sanitizeFrontendValue({
-      ...syncStatus,
-      ...syncScopeStats,
-      posting_freshness_hours: syncSettings?.posting_freshness_hours,
-      active_posting_freshness_hours: syncSettings?.active_posting_freshness_hours,
-      min_posting_freshness_hours: syncSettings?.min_posting_freshness_hours,
-      max_posting_freshness_hours: syncSettings?.max_posting_freshness_hours,
-      ...counts
-    });
-    res.json(payload);
+    try {
+      const [counts, syncScopeStats, syncSettings] = await Promise.all([
+        getCounts({ skipPrune: true }),
+        getSyncScopeStats(),
+        getSyncServiceSettings()
+      ]);
+      const payload = sanitizeFrontendValue({
+        ...syncStatus,
+        ...syncScopeStats,
+        posting_freshness_hours: syncSettings?.posting_freshness_hours,
+        active_posting_freshness_hours: syncSettings?.active_posting_freshness_hours,
+        min_posting_freshness_hours: syncSettings?.min_posting_freshness_hours,
+        max_posting_freshness_hours: syncSettings?.max_posting_freshness_hours,
+        ...counts
+      });
+      return res.json(payload);
+    } catch (error) {
+      const fallbackPayload = sanitizeFrontendValue({
+        ...syncStatus,
+        last_error: syncStatus?.last_error || String(error?.message || error),
+        company_count: 0,
+        posting_count: 0,
+        company_count_by_ats: {},
+        sync_enabled_company_count: 0,
+        configured_enabled_ats_count: 0,
+        excluded_ats_count: 0
+      });
+      return res.status(200).json(fallbackPayload);
+    }
   });
 
   app.post("/sync/workday", handleSyncRequest);
