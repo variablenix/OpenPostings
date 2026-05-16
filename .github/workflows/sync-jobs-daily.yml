@@ -88,7 +88,7 @@ jobs:
           SYNC_WORKER_CONCURRENCY: 30
           ATS_REQUEST_QUEUE_CONCURRENCY: 1
           SYNC_INTERVAL_MS: 86400000
-          LITE_SYNC_MAX_SECONDS: 120
+          LITE_SYNC_MAX_SECONDS: 3300
         run: |
           node server/index.js > "$RUNNER_TEMP/lite-server.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/lite-server.pid"
