@@ -1,12 +1,12 @@
 ﻿name: Deploy OpenPostings Docs
 
 on:
-  schedule:
-    - cron: "20 14 * * *"
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
-  actions: write
   contents: read
   pages: write
   id-token: write
@@ -18,7 +18,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
     env:
       GITHUB_OWNER: ${{ github.repository_owner }}
       GITHUB_REPO: ${{ github.event.repository.name }}
@@ -32,145 +31,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            docs-site/package-lock.json
+          cache-dependency-path: docs-site/package-lock.json
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
-
-      - name: Delete old Pages artifacts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            let page = 1;
-            let deleted = 0;
-            while (true) {
-              const response = await github.rest.actions.listArtifactsForRepo({
-                owner,
-                repo,
-                per_page: 100,
-                page
-              });
-              const artifacts = Array.isArray(response?.data?.artifacts) ? response.data.artifacts : [];
-              if (artifacts.length === 0) break;
-              for (const artifact of artifacts) {
-                if (String(artifact?.name || "") !== "github-pages") continue;
-                await github.rest.actions.deleteArtifact({
-                  owner,
-                  repo,
-                  artifact_id: artifact.id
-                });
-                deleted += 1;
-              }
-              if (artifacts.length < 100) break;
-              page += 1;
-            }
-            core.info(`Deleted ${deleted} prior 'github-pages' artifacts.`);
-
-      - name: Install root dependencies
-        run: npm ci
-
-      - name: Prepare Lite sync database
-        run: |
-          if [ -f jobs.db ]; then
-            cp jobs.db "$RUNNER_TEMP/openpostings-lite.db"
-          else
-            echo "No source DB found (jobs.db)." >&2
-            exit 1
-          fi
-
-      - name: Run timed sync pass for Lite dataset
-        env:
-          PORT: 8787
-          DB_PATH: ${{ runner.temp }}/openpostings-lite.db
-          SYNC_WORKER_CONCURRENCY: 30
-          ATS_REQUEST_QUEUE_CONCURRENCY: 1
-          SYNC_INTERVAL_MS: 86400000
-          LITE_SYNC_MAX_SECONDS: 3300
-        run: |
-          node server/index.js > "$RUNNER_TEMP/lite-server.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/lite-server.pid"
-
-          node -e "const base='http://127.0.0.1:8787/health';const deadline=Date.now()+180000;const tick=async()=>{while(Date.now()<deadline){try{const r=await fetch(base);if(r.ok){console.log('health ok');return;} }catch{} await new Promise((x)=>setTimeout(x,2000));} throw new Error('server health check timed out');};tick().catch((e)=>{console.error(e);process.exit(1);});"
-
-          node - <<'NODE'
-          const fs = require("node:fs");
-
-          const base = "http://127.0.0.1:8787";
-          const maxSeconds = Number(process.env.LITE_SYNC_MAX_SECONDS || 3300);
-          const statusPath = `${process.env.RUNNER_TEMP}/lite-sync-status.json`;
-
-          function sleep(ms) {
-            return new Promise((resolve) => setTimeout(resolve, ms));
-          }
-
-          (async () => {
-            const trigger = await fetch(`${base}/sync/ats`, { method: "POST" });
-            if (!trigger.ok) {
-              throw new Error(`Sync trigger failed (${trigger.status})`);
-            }
-
-            const deadline = Date.now() + maxSeconds * 1000;
-            let lastLogMs = 0;
-            let finalStatus = null;
-            while (true) {
-              const response = await fetch(`${base}/sync/status`);
-              if (response.ok) {
-                const payload = await response.json();
-                finalStatus = payload;
-
-                const now = Date.now();
-                if (now - lastLogMs >= 30000) {
-                  const progress = payload?.progress || {};
-                  const current = Number(progress?.current || 0);
-                  const total = Number(progress?.total || 0);
-                  const company = String(progress?.company_name || "").trim();
-                  const collected = Number(progress?.total_collected || 0);
-                  console.log(
-                    `[lite-sync] progress ${current}/${total} collected=${collected}${company ? ` current=${company}` : ""}`
-                  );
-                  lastLogMs = now;
-                }
-
-                if (!payload?.running) {
-                  console.log("[lite-sync] sync finished within time budget");
-                  break;
-                }
-
-                if (Date.now() >= deadline) {
-                  console.log("[lite-sync] reached sync time budget; continuing with partial synced data");
-                  break;
-                }
-              }
-              await sleep(5000);
-            }
-
-            fs.writeFileSync(statusPath, `${JSON.stringify(finalStatus || {}, null, 2)}\n`, "utf8");
-          })().catch((error) => {
-            console.error(error);
-            process.exit(1);
-          });
-          NODE
-
-      - name: Stop Lite sync server
-        if: always()
-        run: |
-          if [ -f "$RUNNER_TEMP/lite-server.pid" ]; then
-            kill "$(cat "$RUNNER_TEMP/lite-server.pid")" 2>/dev/null || true
-            sleep 2
-            kill -9 "$(cat "$RUNNER_TEMP/lite-server.pid")" 2>/dev/null || true
-          fi
-
-      - name: Build Lite chunk files
-        env:
-          OPENPOSTINGS_LITE_DB_PATH: ${{ runner.temp }}/openpostings-lite.db
-          OPENPOSTINGS_LITE_OUTPUT_DIR: ${{ github.workspace }}/docs-site/static/lite-data
-          OPENPOSTINGS_LITE_CHUNK_SIZE: 300
-          OPENPOSTINGS_LITE_WINDOW_HOURS: 24
-          OPENPOSTINGS_LITE_MAX_OUTPUT_MB: 400
-        run: npm run lite:build-chunks
 
       - name: Install docs dependencies
         run: npm ci
@@ -184,7 +48,6 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: docs-site/build
-          retention-days: 1
 
   deploy:
     environment:
