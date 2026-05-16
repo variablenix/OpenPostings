@@ -88,7 +88,7 @@ jobs:
           SYNC_WORKER_CONCURRENCY: 30
           ATS_REQUEST_QUEUE_CONCURRENCY: 1
           SYNC_INTERVAL_MS: 86400000
-          LITE_SYNC_MAX_SECONDS: 3300
+          LITE_SYNC_MAX_SECONDS: 120
         run: |
           node server/index.js > "$RUNNER_TEMP/lite-server.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/lite-server.pid"
@@ -99,7 +99,7 @@ jobs:
           const fs = require("node:fs");
 
           const base = "http://127.0.0.1:8787";
-          const maxSeconds = Number(process.env.LITE_SYNC_MAX_SECONDS || 3300);
+          const maxSeconds = Number(process.env.LITE_SYNC_MAX_SECONDS || 120);
           const statusPath = `${process.env.RUNNER_TEMP}/lite-sync-status.json`;
 
           function sleep(ms) {
