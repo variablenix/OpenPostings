@@ -18,6 +18,16 @@ const SYNC_WORKER_CONCURRENCY =
     ? Math.floor(SYNC_WORKER_CONCURRENCY_RAW)
     : 4;
 const FETCH_TIMEOUT_MS = Number(process.env.FETCH_TIMEOUT_MS || 12000);
+const ATS_RATE_LIMIT_MAX_RETRIES_RAW = Number(process.env.ATS_RATE_LIMIT_MAX_RETRIES || 0);
+const ATS_RATE_LIMIT_MAX_RETRIES =
+  Number.isFinite(ATS_RATE_LIMIT_MAX_RETRIES_RAW) && ATS_RATE_LIMIT_MAX_RETRIES_RAW > 0
+    ? Math.floor(ATS_RATE_LIMIT_MAX_RETRIES_RAW)
+    : 0;
+const ATS_RATE_LIMIT_MAX_COOLDOWN_MS_RAW = Number(process.env.ATS_RATE_LIMIT_MAX_COOLDOWN_MS || 0);
+const ATS_RATE_LIMIT_MAX_COOLDOWN_MS =
+  Number.isFinite(ATS_RATE_LIMIT_MAX_COOLDOWN_MS_RAW) && ATS_RATE_LIMIT_MAX_COOLDOWN_MS_RAW > 0
+    ? Math.floor(ATS_RATE_LIMIT_MAX_COOLDOWN_MS_RAW)
+    : 0;
 const ATS_REQUEST_QUEUE_CONCURRENCY_RAW = Number(process.env.ATS_REQUEST_QUEUE_CONCURRENCY || 1);
 const ATS_REQUEST_QUEUE_CONCURRENCY_DEFAULT =
   Number.isFinite(ATS_REQUEST_QUEUE_CONCURRENCY_RAW) && ATS_REQUEST_QUEUE_CONCURRENCY_RAW > 0
@@ -8211,28 +8221,51 @@ function markAtsRateLimited(rateLimitKey, waitMs) {
   state.blockedUntilEpochMs = Math.max(state.blockedUntilEpochMs, Date.now() + ms);
 }
 
-async function waitForAtsCooldown(rateLimitKey) {
+async function waitForAtsCooldown(rateLimitKey, options = {}) {
+  const maxCooldownMs = Math.max(0, Number(options?.max_cooldown_ms || 0));
+  const startedAtMs = Date.now();
   const state = getAtsRateLimitState(rateLimitKey);
   while (true) {
     const waitMs = Number(state.blockedUntilEpochMs || 0) - Date.now();
     if (waitMs <= 0) return;
+    if (maxCooldownMs > 0) {
+      const elapsedMs = Date.now() - startedAtMs;
+      const remainingMs = maxCooldownMs - elapsedMs;
+      if (remainingMs <= 0) {
+        throw new Error(
+          `ATS cooldown exceeded ${maxCooldownMs}ms for '${String(rateLimitKey || "unknown")}'`
+        );
+      }
+      await sleep(Math.min(waitMs, remainingMs));
+      continue;
+    }
     await sleep(waitMs);
   }
 }
 
 async function fetchWithAtsRateLimit(rateLimitKey, fallbackWaitMs, url, init = {}) {
+  let rateLimitRetryCount = 0;
   while (true) {
+    if (ATS_RATE_LIMIT_MAX_RETRIES > 0 && rateLimitRetryCount >= ATS_RATE_LIMIT_MAX_RETRIES) {
+      throw new Error(
+        `ATS rate-limit retry cap reached for '${String(rateLimitKey || "unknown")}' after ${ATS_RATE_LIMIT_MAX_RETRIES} retries`
+      );
+    }
+
     await acquireAtsRequestSlot(rateLimitKey);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      await waitForAtsCooldown(rateLimitKey);
+      await waitForAtsCooldown(rateLimitKey, {
+        max_cooldown_ms: ATS_RATE_LIMIT_MAX_COOLDOWN_MS
+      });
       const res = await fetch(url, {
         ...init,
         signal: controller.signal
       });
 
       if (res.status === 429) {
+        rateLimitRetryCount += 1;
         markAtsRateLimited(rateLimitKey, resolveAtsRateLimitWaitMs(res, fallbackWaitMs));
         continue;
       }

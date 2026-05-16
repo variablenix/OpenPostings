@@ -55,16 +55,16 @@ const config = {
         respectPrefersColorScheme: true
       },
       navbar: {
-        title: "OpenPostings",
+        title: "Lite",
         logo: {
           alt: "OpenPostings Logo",
-          src: "img/logo.svg"
+          src: "img/logo.png"
         },
         items: [
           {
             type: "docSidebar",
             sidebarId: "docsSidebar",
-            position: "left",
+            position: "right",
             label: "Docs"
           },
           {
@@ -90,7 +90,7 @@ const config = {
             ]
           }
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} OpenPostings`
+        copyright: `Copyright © ${new Date().getFullYear()} OpenPostings · OpenPostings Lite syncs once daily at 14:20 UTC.`
       },
       prism: {
         theme: prismThemes.github,

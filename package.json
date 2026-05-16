@@ -16,6 +16,8 @@
     "test:windows": "jest --config jest.config.windows.js",
     "test:backend": "node --check server/index.js && node --check server/mcp-apply-server.js",
     "test:backend:seeded-source": "node server/tests/seeded-source-parser.test.js",
+    "lite:build-chunks": "node ./scripts/lite/build-lite-chunks.mjs",
+    "lite:benchmark": "node ./scripts/lite/benchmark-lite-pipeline.mjs",
     "ios": "expo run:ios"
   },
   "dependencies": {
