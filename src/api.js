@@ -7,7 +7,8 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_UR
 const IS_ANDROID_LOCAL_BACKEND =
   Platform.OS === "android" &&
   (API_BASE_URL.startsWith("http://127.0.0.1:") || API_BASE_URL.startsWith("http://localhost:"));
-const ANDROID_LOCAL_BACKEND_RETRY_DELAYS_MS = [250, 500, 750, 1000, 1250, 1500, 2000];
+// Android first launch can take longer while nodejs assets are copied.
+const ANDROID_LOCAL_BACKEND_RETRY_DELAYS_MS = [500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -84,7 +84,10 @@ const JOIN_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const TALENTREEF_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const SAPHRCLOUD_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const ADP_MYJOBS_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const PAYCOR_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const PAYCOMONLINE_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const PRISMHR_RATE_LIMIT_WAIT_MS = 60 * 1000;
+const SILKROAD_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const ADP_WORKFORCENOW_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const CAREERSPAGE_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const ORACLE_RATE_LIMIT_WAIT_MS = 60 * 1000;
@@ -705,7 +708,10 @@ const ATS_FILTER_OPTIONS = new Set([
   "talentreef",
   "saphrcloud",
   "adp_myjobs",
+  "paycor",
   "paycomonline",
+  "prismhr",
+  "silkroad",
   "adp_workforcenow",
   "careerspage",
   "oracle",
@@ -764,7 +770,10 @@ const ATS_FILTER_OPTION_ITEMS = Object.freeze([
   { value: "careerplug", label: "CareerPlug" },
   { value: "bamboohr", label: "BambooHR" },
   { value: "adp_myjobs", label: "ADP MyJobs" },
+  { value: "paycor", label: "Paycor" },
   { value: "paycomonline", label: "PaycomOnline" },
+  { value: "prismhr", label: "PrismHR" },
+  { value: "silkroad", label: "SilkRoad" },
   { value: "adp_workforcenow", label: "ADP Workforce Now" },
   { value: "oracle", label: "Oracle" },
   { value: "paylocity", label: "Paylocity" },
@@ -1860,7 +1869,12 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes(".jobs.hr.cloud.sap/job/")) return "saphrcloud";
   if (url.includes(".jobs.hr.cloud.sap/search/")) return "saphrcloud";
   if (url.includes("myjobs.adp.com/") && url.includes("/cx/job-details")) return "adp_myjobs";
+  if (url.includes("recruitingbypaycor.com/career/jobintroduction.action")) return "paycor";
   if (url.includes("paycomonline.net/v4/ats/web.php/jobs/viewjobdetails?job=")) return "paycomonline";
+  if (url.includes(".prismhr-hire.com/job/")) return "prismhr";
+  if (url.includes(".prismhr-hire.com")) return "prismhr";
+  if (url.includes("jobs.silkroad.com/") && url.includes("/careers/jobs/")) return "silkroad";
+  if (url.includes("www.jobs.silkroad.com/") && url.includes("/careers/jobs/")) return "silkroad";
   if (url.includes("workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html")) return "adp_workforcenow";
   if (url.includes("workforcenow.adp.com/jobs/apply/posting.html")) return "adp_workforcenow";
   if (url.includes("careerspage.io/")) {
@@ -2227,6 +2241,15 @@ function normalizeAtsFilterValue(value) {
     return "adp_myjobs";
   }
   if (
+    normalized === "paycor" ||
+    normalized === "recruitingbypaycor.com" ||
+    normalized === "recruitingbypaycorcom" ||
+    normalized === "www.recruitingbypaycor.com" ||
+    normalized === "wwwrecruitingbypaycorcom"
+  ) {
+    return "paycor";
+  }
+  if (
     normalized === "paycomonline" ||
     normalized === "paycomonline.net" ||
     normalized === "paycomonlinenet" ||
@@ -2234,6 +2257,24 @@ function normalizeAtsFilterValue(value) {
     normalized === "wwwpaycomonlinenet"
   ) {
     return "paycomonline";
+  }
+  if (
+    normalized === "prismhr" ||
+    normalized === "prismhr-hire.com" ||
+    normalized === "prismhrhirecom" ||
+    normalized === "www.prismhr-hire.com" ||
+    normalized === "wwwprismhrhirecom"
+  ) {
+    return "prismhr";
+  }
+  if (
+    normalized === "silkroad" ||
+    normalized === "jobs.silkroad.com" ||
+    normalized === "jobssilkroadcom" ||
+    normalized === "www.jobs.silkroad.com" ||
+    normalized === "wwwjobssilkroadcom"
+  ) {
+    return "silkroad";
   }
   if (
     normalized === "adp_workforcenow" ||
@@ -2596,7 +2637,10 @@ const SEEDED_COMPANY_SOURCE_PARSER_BY_ATS = Object.freeze({
   talentreef: parseTalentreefCompany,
   saphrcloud: parseSapHrCloudCompany,
   adp_myjobs: parseAdpMyjobsCompany,
+  paycor: parsePaycorCompany,
   paycomonline: parsePaycomonlineCompany,
+  prismhr: parsePrismhrCompany,
+  silkroad: parseSilkroadCompany,
   adp_workforcenow: parseAdpWorkforcenowCompany,
   careerspage: parseCareerspageCompany,
   oracle: parseOracleCompany,
@@ -3108,7 +3152,16 @@ function inferPostingLocationFromJobUrl(jobPostingUrl) {
     if (parsed.hostname === "myjobs.adp.com" || parsed.hostname === "www.myjobs.adp.com") {
       return postingLocationByJobUrl.get(url) || null;
     }
+    if (parsed.hostname === "recruitingbypaycor.com" || parsed.hostname === "www.recruitingbypaycor.com") {
+      return postingLocationByJobUrl.get(url) || null;
+    }
     if (parsed.hostname === "paycomonline.net" || parsed.hostname === "www.paycomonline.net") {
+      return postingLocationByJobUrl.get(url) || null;
+    }
+    if (parsed.hostname.endsWith(".prismhr-hire.com")) {
+      return postingLocationByJobUrl.get(url) || null;
+    }
+    if (parsed.hostname === "jobs.silkroad.com" || parsed.hostname === "www.jobs.silkroad.com") {
       return postingLocationByJobUrl.get(url) || null;
     }
     if (parsed.hostname === "workforcenow.adp.com" || parsed.hostname === "www.workforcenow.adp.com") {
@@ -3306,6 +3359,33 @@ function parseAdpMyjobsCompany(urlString) {
   };
 }
 
+function parsePaycorCompany(urlString) {
+  const parsed = parseUrl(urlString);
+  if (!parsed) return null;
+
+  const host = String(parsed.hostname || "").toLowerCase();
+  const clientId = String(parsed.searchParams?.get("clientId") || "").trim();
+  const pathLower = String(parsed.pathname || "").toLowerCase();
+  const looksLikePaycorHost = host === "recruitingbypaycor.com" || host === "www.recruitingbypaycor.com";
+  const looksLikePaycorPath =
+    pathLower.includes("/career/careerhome.action") ||
+    pathLower.includes("/career/jobintroduction.action") ||
+    pathLower.includes("/career/careerhomesearch.action");
+  if (!looksLikePaycorHost && !looksLikePaycorPath && !clientId) return null;
+
+  const normalizedInputUrl = normalizeSourceUrlString(urlString);
+  const boardUrl = clientId
+    ? `https://recruitingbypaycor.com/career/CareerHome.action?clientId=${encodeURIComponent(clientId)}`
+    : normalizedInputUrl;
+
+  if (!boardUrl) return null;
+  return {
+    boardUrl,
+    clientId,
+    clientIdLower: clientId.toLowerCase()
+  };
+}
+
 function parsePaycomonlineCompany(urlString) {
   const parsed = parseUrl(urlString);
   if (!parsed) return null;
@@ -3328,6 +3408,49 @@ function parsePaycomonlineCompany(urlString) {
     companyNameUrl: "https://portal-applicant-tracking.us-cent.paycomonline.net/api/ats/company-name",
     postingsSearchUrl:
       "https://portal-applicant-tracking.us-cent.paycomonline.net/api/ats/job-posting-previews/search"
+  };
+}
+
+function parsePrismhrCompany(urlString) {
+  const parsed = parseUrl(urlString);
+  if (!parsed) return null;
+
+  const host = String(parsed.hostname || "").toLowerCase();
+  if (!host.endsWith(".prismhr-hire.com")) return null;
+  if (host === "prismhr-hire.com" || host === "www.prismhr-hire.com" || host === "login.prismhr-hire.com") {
+    return null;
+  }
+
+  const baseOrigin = `${parsed.protocol}//${parsed.host}`;
+  return {
+    host,
+    boardUrl: `${baseOrigin}/`
+  };
+}
+
+function parseSilkroadCompany(urlString) {
+  const parsed = parseUrl(urlString);
+  if (!parsed) return null;
+
+  const host = String(parsed.hostname || "").toLowerCase();
+  if (host !== "jobs.silkroad.com" && host !== "www.jobs.silkroad.com") return null;
+
+  const pathParts = parsed.pathname
+    .split("/")
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+  if (pathParts.length < 2) return null;
+
+  const companyKey = String(pathParts[0] || "").trim();
+  const careersPart = String(pathParts[1] || "").trim();
+  if (!companyKey || careersPart.toLowerCase() !== "careers") return null;
+
+  const boardUrl = `https://jobs.silkroad.com/${companyKey}/Careers`;
+  return {
+    host,
+    companyKey,
+    companyKeyLower: companyKey.toLowerCase(),
+    boardUrl
   };
 }
 
@@ -9270,6 +9393,150 @@ async function fetchAdpMyjobsCareerSite(config) {
   return res.json();
 }
 
+function cleanPaycorText(value) {
+  return decodeHtmlEntities(String(value || ""))
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractPaycorCompanyNameFromHtml(pageHtml, fallbackClientId = "") {
+  const source = String(pageHtml || "");
+  const candidates = [];
+
+  const titleMatch = source.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (titleMatch?.[1]) candidates.push(cleanPaycorText(titleMatch[1]));
+
+  const metaRegex = /<meta\b[^>]*\bcontent=["']([^"']+)["'][^>]*>/gi;
+  let metaMatch = metaRegex.exec(source);
+  while (metaMatch) {
+    const value = cleanPaycorText(metaMatch[1]);
+    if (value) candidates.push(value);
+    metaMatch = metaRegex.exec(source);
+  }
+
+  for (const candidateRaw of candidates) {
+    const candidate = String(candidateRaw || "").trim();
+    if (!candidate) continue;
+    const splitPipe = candidate.split("|").map((part) => part.trim()).filter(Boolean);
+    if (splitPipe.length > 1) return splitPipe[splitPipe.length - 1];
+    const normalized = candidate
+      .replace(/^current openings\s*[-:|]\s*/i, "")
+      .replace(/\s*[-:|]\s*careers?$/i, "")
+      .replace(/\s*\|\s*careers?$/i, "")
+      .trim();
+    if (normalized) return normalized;
+  }
+
+  return String(fallbackClientId || "").trim() || "unknown_company_id";
+}
+
+function parsePaycorPostingDateFromJobId(jobId) {
+  const raw = String(jobId || "").trim();
+  if (!raw) return null;
+  const yyyymmddMatch = raw.match(/(20\d{2})(0[1-9]|1[0-2])([0-2]\d|3[0-1])/);
+  if (!yyyymmddMatch) return null;
+
+  const year = Number(yyyymmddMatch[1]);
+  const month = Number(yyyymmddMatch[2]);
+  const day = Number(yyyymmddMatch[3]);
+  const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function extractPaycorPostingDateFromDetailHtml(detailHtml) {
+  const source = String(detailHtml || "");
+  if (!source) return null;
+
+  const datePatterns = [
+    /<b>\s*(?:Date\s*Posted|Posted\s*Date|Posting\s*Date)\s*:?\s*<\/b>\s*([^<\r\n]+)/i,
+    /(?:Date\s*Posted|Posted\s*Date|Posting\s*Date)\s*:\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{2,4})/i,
+    /(?:Date\s*Posted|Posted\s*Date|Posting\s*Date)\s*:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i
+  ];
+  for (const pattern of datePatterns) {
+    const match = pattern.exec(source);
+    const candidate = cleanPaycorText(match?.[1] || "");
+    if (!candidate) continue;
+    const epoch = parsePostingDateToEpochSeconds(candidate, nowEpochSeconds());
+    if (!epoch) continue;
+    return new Date(epoch * 1000).toISOString();
+  }
+
+  const jobIdMatch =
+    source.match(/<td[^>]*id=["']gnewtonJobID["'][^>]*>[\s\S]*?<b>\s*Job\s*Id:\s*<\/b>\s*([^<\r\n]+)/i) ||
+    source.match(/Job\s*Id:\s*([A-Za-z0-9_-]+)/i);
+  return parsePaycorPostingDateFromJobId(cleanPaycorText(jobIdMatch?.[1] || ""));
+}
+
+function parsePaycorPostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  if (!source) return { postings: [], validBoard: false, hasNoJobsState: false };
+
+  const lower = source.toLowerCase();
+  const hasNoJobsState = lower.includes('id="gnewtonnoactivejobs"');
+  const validBoard =
+    lower.includes("recruitingbypaycor.com/career") ||
+    lower.includes('id="gnewtoncareerbody"') ||
+    lower.includes("gnewtoncareergrouprowclass");
+  if (!validBoard) {
+    return { postings: [], validBoard: false, hasNoJobsState };
+  }
+  if (hasNoJobsState) {
+    return { postings: [], validBoard: true, hasNoJobsState: true };
+  }
+
+  const postings = [];
+  const seenUrls = new Set();
+  const anchorPattern = /<a[^>]*href=["']([^"']*JobIntroduction\.action[^"']*)["'][^>]*(?:ns-qa=["']([^"']*)["'])?[^>]*>([\s\S]*?)<\/a>/gi;
+  let anchorMatch = anchorPattern.exec(source);
+  while (anchorMatch) {
+    const href = cleanPaycorText(anchorMatch[1] || "");
+    const titleFromNsqa = cleanPaycorText(anchorMatch[2] || "");
+    const titleFromLabel = cleanPaycorText(anchorMatch[3] || "");
+    let postingUrl = "";
+    try {
+      postingUrl = new URL(href, pageUrl).toString();
+    } catch {
+      postingUrl = "";
+    }
+
+    if (!postingUrl || seenUrls.has(postingUrl)) {
+      anchorMatch = anchorPattern.exec(source);
+      continue;
+    }
+
+    const nearbyHtml = source.slice(anchorMatch.index, anchorMatch.index + 1200);
+    const locationMatch =
+      nearbyHtml.match(
+        /<div[^>]*class=["'][^"']*\bgnewtonCareerGroupJobDescriptionClass\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
+      ) || nearbyHtml.match(/<td[^>]*id=["']gnewtonJobLocationInfo["'][^>]*>([\s\S]*?)<\/td>/i);
+    const location = cleanPaycorText(locationMatch?.[1] || "") || null;
+
+    const inlineDateMatch = nearbyHtml.match(
+      /(?:Date\s*Posted|Posted\s*Date|Posting\s*Date|Posted)\s*[:\-]?\s*([A-Za-z]{3,9}\s+\d{1,2},?\s+\d{2,4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i
+    );
+    let postingDate = null;
+    if (inlineDateMatch?.[1]) {
+      const parsedEpoch = parsePostingDateToEpochSeconds(cleanPaycorText(inlineDateMatch[1]), nowEpochSeconds());
+      if (parsedEpoch) postingDate = new Date(parsedEpoch * 1000).toISOString();
+    }
+
+    postings.push({
+      company_name: String(companyNameForPostings || "").trim() || "Unknown Company",
+      position_name: titleFromNsqa || titleFromLabel || "Untitled Position",
+      job_posting_url: postingUrl,
+      posting_date: postingDate,
+      location
+    });
+    seenUrls.add(postingUrl);
+    anchorMatch = anchorPattern.exec(source);
+  }
+
+  return { postings, validBoard: true, hasNoJobsState: false };
+}
+
 function extractPaycomonlineSessionJwt(pageHtml) {
   const source = String(pageHtml || "");
   const match = source.match(/"sessionJWT":"([^"]+)"/i);
@@ -9312,6 +9579,163 @@ function parsePaycomonlinePostingsFromPayload(payload, companyName) {
     seenUrls.add(jobPostingUrl);
   }
   return postings;
+}
+
+function extractPrismhrPostingDateFromDetailHtml(detailHtml) {
+  const source = String(detailHtml || "");
+  if (!source) return null;
+
+  const patterns = [
+    /"datePosted"\s*:\s*"([^"]+)"/i,
+    /"datePublished"\s*:\s*"([^"]+)"/i
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(source);
+    const raw = toCleanString(decodeHtmlEntities(match?.[1] || ""));
+    if (!raw) continue;
+    const parsedEpoch = parsePostingDateToEpochSeconds(raw, nowEpochSeconds());
+    if (!parsedEpoch) continue;
+    return new Date(parsedEpoch * 1000).toISOString();
+  }
+
+  return null;
+}
+
+function parsePrismhrPostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  if (!source) return [];
+
+  const lower = source.toLowerCase();
+  const hasBoardMarker =
+    (lower.includes('id="career-opportunities"') || lower.includes("career opportunities")) &&
+    lower.includes('data-react-class="hiringthing.components.jobfilterscontainer"');
+  if (!hasBoardMarker) return [];
+
+  if (lower.includes("no open positions at this time")) return [];
+
+  const postings = [];
+  const seenUrls = new Set();
+  const blockRegex =
+    /<div[^>]*class=["'][^"']*\bjob-container\b[^"']*["'][^>]*data-job-id=["'](?<jobId>\d+)["'][^>]*>(?<block>[\s\S]*?)<\/div>\s*<\/div>/gi;
+  const linkRegex =
+    /<a[^>]*href=["'](?<href>\/job\/\d+\/[^"']+)["'][^>]*>\s*<h2>(?<title>[\s\S]*?)<\/h2>/i;
+  const locationRegex =
+    /<div[^>]*class=["'][^"']*\bjob-location\b[^"']*["'][^>]*>(?<location>[\s\S]*?)<\/div>/i;
+
+  let match = blockRegex.exec(source);
+  while (match) {
+    const block = String(match.groups?.block || "");
+    const linkMatch = linkRegex.exec(block);
+    if (!linkMatch) {
+      match = blockRegex.exec(source);
+      continue;
+    }
+
+    const href = decodeHtmlEntities(String(linkMatch.groups?.href || ""));
+    const postingUrl = toAbsoluteUrl(pageUrl, href);
+    if (!postingUrl || seenUrls.has(postingUrl)) {
+      match = blockRegex.exec(source);
+      continue;
+    }
+
+    const positionName = toCleanString(stripHtml(linkMatch.groups?.title || "")) || "Untitled Position";
+    const location = toCleanString(stripHtml(locationRegex.exec(block)?.groups?.location || "")) || null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: positionName,
+      job_posting_url: postingUrl,
+      posting_date: null,
+      location
+    });
+    seenUrls.add(postingUrl);
+    match = blockRegex.exec(source);
+  }
+
+  return postings;
+}
+
+function extractSilkroadPostingDateFromDetailHtml(detailHtml) {
+  const source = String(detailHtml || "");
+  if (!source) return null;
+
+  const patterns = [
+    /["']datePosted["']\s*:\s*["']([^"']+)["']/i,
+    /["']datePublished["']\s*:\s*["']([^"']+)["']/i,
+    /&quot;datePosted&quot;\s*:\s*&quot;([^&]+)&quot;/i,
+    /&quot;datePublished&quot;\s*:\s*&quot;([^&]+)&quot;/i
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(source);
+    const raw = toCleanString(decodeHtmlEntities(match?.[1] || ""));
+    if (!raw) continue;
+    const parsedEpoch = parsePostingDateToEpochSeconds(raw, nowEpochSeconds());
+    if (!parsedEpoch) continue;
+    return new Date(parsedEpoch * 1000).toISOString();
+  }
+
+  return null;
+}
+
+function extractSilkroadTotalPagesFromHtml(pageHtml) {
+  const source = String(pageHtml || "");
+  if (!source) return 1;
+  const pageMatch = source.match(
+    /id=["']Jobs_PagedJobList_CurrentPageText["'][^>]*>\s*Page\s*\d+\s*of\s*(\d+)/i
+  );
+  const totalPages = Number(pageMatch?.[1] || 0);
+  if (!Number.isFinite(totalPages) || totalPages < 1) return 1;
+  return Math.max(1, Math.min(100, Math.floor(totalPages)));
+}
+
+function parseSilkroadPostingsFromHtml(companyNameForPostings, pageHtml, pageUrl) {
+  const source = String(pageHtml || "");
+  if (!source) return { postings: [], validBoard: false, hasNoJobsState: false, totalPages: 1 };
+
+  const lower = source.toLowerCase();
+  const hasSearchOrHeaderMarker =
+    lower.includes('id="jobs_jobsearch_searchform"') || lower.includes('id="base_layout_jobsheaderlink"');
+  const hasNoJobsState = lower.includes('id="jobs_jobsearchresults_nojobs_pageheading"');
+  const totalPages = extractSilkroadTotalPagesFromHtml(source);
+  if (!hasSearchOrHeaderMarker) {
+    return { postings: [], validBoard: false, hasNoJobsState, totalPages };
+  }
+
+  const postings = [];
+  const seenUrls = new Set();
+  const linkPattern = /<a[^>]*id=["']Jobs_PagedJobList_Job-(\d+)["'][^>]*class=["'][^"']*\bsr-panel\b[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const titlePattern =
+    /<div[^>]*id=["']Jobs_PagedJobList_JobTitle-\d+["'][^>]*>([\s\S]*?)<\/div>/i;
+  const locationPattern =
+    /<div[^>]*id=["']Jobs_PagedJobList_JobLocation-\d+["'][^>]*>[\s\S]*?<span[^>]*class=["'][^"']*\bsr-panel__meta\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i;
+
+  let match = linkPattern.exec(source);
+  while (match) {
+    const postingId = toCleanString(decodeHtmlEntities(match[1] || ""));
+    const href = toCleanString(decodeHtmlEntities(match[2] || ""));
+    const block = String(match[3] || "");
+    const postingUrl = toAbsoluteUrl(pageUrl, href);
+    if (!postingUrl || seenUrls.has(postingUrl)) {
+      match = linkPattern.exec(source);
+      continue;
+    }
+
+    const title = toCleanString(stripHtml(titlePattern.exec(block)?.[1] || "")) || "Untitled Position";
+    const location = toCleanString(stripHtml(locationPattern.exec(block)?.[1] || "")) || null;
+
+    postings.push({
+      company_name: companyNameForPostings,
+      position_name: title,
+      job_posting_url: postingUrl,
+      posting_date: null,
+      location,
+      external_job_id: postingId || null
+    });
+    seenUrls.add(postingUrl);
+    match = linkPattern.exec(source);
+  }
+
+  return { postings, validBoard: true, hasNoJobsState, totalPages };
 }
 
 async function fetchAdpWorkforcenowContentLinks(config) {
@@ -10303,6 +10727,65 @@ async function collectPostingsForAdpMyjobsCompany(company) {
   return collected;
 }
 
+async function collectPostingsForPaycorCompany(company) {
+  const config = parsePaycorCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const boardRes = await fetchWithAtsRateLimit("paycor", PAYCOR_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    method: "GET",
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!boardRes.ok) {
+    const body = await boardRes.text();
+    throw new Error(`Paycor board request failed (${boardRes.status}): ${body.slice(0, 180)}`);
+  }
+
+  const finalBoardUrl = String(boardRes.url || config.boardUrl || "").trim();
+  const boardHtml = await boardRes.text();
+  const resolvedClientId =
+    String(parseUrl(finalBoardUrl)?.searchParams?.get("clientId") || "").trim() || String(config.clientId || "").trim();
+  const companyNameForPostings =
+    normalizedCompanyName || extractPaycorCompanyNameFromHtml(boardHtml, resolvedClientId);
+
+  const parsedBoard = parsePaycorPostingsFromHtml(companyNameForPostings, boardHtml, finalBoardUrl);
+  if (!parsedBoard.validBoard) return [];
+  if (parsedBoard.postings.length === 0) return [];
+
+  const collected = [];
+  const referenceEpoch = nowEpochSeconds();
+  for (const posting of parsedBoard.postings) {
+    let postingDate = String(posting?.posting_date || "").trim();
+    if (!postingDate) {
+      const postingUrl = String(posting?.job_posting_url || "").trim();
+      if (postingUrl) {
+        try {
+          const detailRes = await fetchWithAtsRateLimit("paycor", PAYCOR_RATE_LIMIT_WAIT_MS, postingUrl, {
+            method: "GET",
+            headers: {
+              ...DEFAULT_HTML_HEADERS,
+              Referer: finalBoardUrl
+            }
+          });
+          if (detailRes.ok) {
+            const detailHtml = await detailRes.text();
+            postingDate = String(extractPaycorPostingDateFromDetailHtml(detailHtml) || "").trim();
+          }
+        } catch {
+          postingDate = "";
+        }
+      }
+    }
+
+    if (!postingDate) continue;
+    if (!shouldStorePostingByDate(postingDate, referenceEpoch)) continue;
+    posting.posting_date = postingDate;
+    collected.push(posting);
+  }
+
+  return collected;
+}
+
 async function collectPostingsForPaycomonlineCompany(company) {
   const config = parsePaycomonlineCompany(company.url_string);
   if (!config) return [];
@@ -10410,6 +10893,143 @@ async function collectPostingsForPaycomonlineCompany(company) {
   }
 
   return collected;
+}
+
+async function collectPostingsForPrismhrCompany(company) {
+  const config = parsePrismhrCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings =
+    normalizedCompanyName || extractCompanyNameFromUrlString(config.host) || config.host;
+
+  const boardRes = await fetchWithAtsRateLimit("prismhr", PRISMHR_RATE_LIMIT_WAIT_MS, config.boardUrl, {
+    method: "GET",
+    headers: DEFAULT_HTML_HEADERS
+  });
+  if (!boardRes.ok) {
+    const body = await boardRes.text();
+    throw new Error(`PrismHR board request failed (${boardRes.status}): ${body.slice(0, 180)}`);
+  }
+
+  const finalBoardUrl = String(boardRes.url || config.boardUrl || "").trim();
+  const finalHost = String(parseUrl(finalBoardUrl)?.hostname || "").toLowerCase();
+  if (!finalHost.endsWith(".prismhr-hire.com") || finalHost === "login.prismhr-hire.com") {
+    return [];
+  }
+
+  const boardHtml = await boardRes.text();
+  const postings = parsePrismhrPostingsFromHtml(companyNameForPostings, boardHtml, finalBoardUrl);
+  if (!Array.isArray(postings) || postings.length === 0) return [];
+
+  for (const posting of postings) {
+    const postingUrl = String(posting?.job_posting_url || "").trim();
+    if (!postingUrl) continue;
+    try {
+      const detailRes = await fetchWithAtsRateLimit("prismhr", PRISMHR_RATE_LIMIT_WAIT_MS, postingUrl, {
+        method: "GET",
+        headers: {
+          ...DEFAULT_HTML_HEADERS,
+          Referer: finalBoardUrl
+        }
+      });
+      if (!detailRes.ok) continue;
+      const detailHtml = await detailRes.text();
+      const postingDate = extractPrismhrPostingDateFromDetailHtml(detailHtml);
+      if (postingDate) {
+        posting.posting_date = postingDate;
+      }
+    } catch {
+      // Keep listing posting even if detail page is temporarily unavailable.
+    }
+  }
+
+  return postings;
+}
+
+async function collectPostingsForSilkroadCompany(company) {
+  const config = parseSilkroadCompany(company.url_string);
+  if (!config) return [];
+
+  const normalizedCompanyName = String(company?.company_name || "").trim();
+  const companyNameForPostings = normalizedCompanyName || config.companyKey || config.companyKeyLower;
+
+  const seenPostingUrls = new Set();
+  const allPostings = [];
+  let currentPage = 1;
+  let totalPages = 1;
+  const maxPageHardLimit = 100;
+
+  while (currentPage <= totalPages && currentPage <= maxPageHardLimit) {
+    const pageUrl =
+      currentPage <= 1 ? config.boardUrl : `${config.boardUrl}?page=${encodeURIComponent(currentPage)}`;
+
+    const boardRes = await fetchWithAtsRateLimit("silkroad", SILKROAD_RATE_LIMIT_WAIT_MS, pageUrl, {
+      method: "GET",
+      headers: DEFAULT_HTML_HEADERS
+    });
+    if (!boardRes.ok) {
+      const body = await boardRes.text();
+      throw new Error(`SilkRoad board request failed (${boardRes.status}): ${body.slice(0, 180)}`);
+    }
+
+    const finalPageUrl = String(boardRes.url || pageUrl || "").trim();
+    const finalHost = String(parseUrl(finalPageUrl)?.hostname || "").toLowerCase();
+    if (finalHost !== "jobs.silkroad.com" && finalHost !== "www.jobs.silkroad.com") {
+      throw new Error(`SilkRoad URL redirected to unexpected host: ${finalPageUrl}`);
+    }
+
+    const boardHtml = await boardRes.text();
+    const parsedPage = parseSilkroadPostingsFromHtml(companyNameForPostings, boardHtml, finalPageUrl);
+    if (!parsedPage.validBoard) {
+      if (currentPage === 1) {
+        throw new Error("Unexpected SilkRoad board HTML shape");
+      }
+      break;
+    }
+
+    totalPages = Math.max(totalPages, Number(parsedPage.totalPages || 1));
+    if (parsedPage.postings.length === 0) {
+      if (parsedPage.hasNoJobsState) return [];
+      break;
+    }
+
+    for (const posting of parsedPage.postings) {
+      const postingUrl = String(posting?.job_posting_url || "").trim();
+      if (!postingUrl || seenPostingUrls.has(postingUrl)) continue;
+      seenPostingUrls.add(postingUrl);
+      allPostings.push(posting);
+    }
+
+    currentPage += 1;
+  }
+
+  const freshPostings = [];
+  const referenceEpoch = nowEpochSeconds();
+  for (const posting of allPostings) {
+    const postingUrl = String(posting?.job_posting_url || "").trim();
+    if (!postingUrl) continue;
+    try {
+      const detailRes = await fetchWithAtsRateLimit("silkroad", SILKROAD_RATE_LIMIT_WAIT_MS, postingUrl, {
+        method: "GET",
+        headers: {
+          ...DEFAULT_HTML_HEADERS,
+          Referer: config.boardUrl
+        }
+      });
+      if (!detailRes.ok) continue;
+      const detailHtml = await detailRes.text();
+      const postingDate = extractSilkroadPostingDateFromDetailHtml(detailHtml);
+      if (!postingDate) continue;
+      if (!shouldStorePostingByDate(postingDate, referenceEpoch)) continue;
+      posting.posting_date = postingDate;
+      freshPostings.push(posting);
+    } catch {
+      // Skip posting if detail fetch/date extraction fails.
+    }
+  }
+
+  return freshPostings;
 }
 
 async function collectPostingsForAdpWorkforcenowCompany(company) {
@@ -14691,6 +15311,15 @@ async function collectPostingsForCompany(company) {
     return collectPostingsForAdpMyjobsCompany(company);
   }
   if (
+    atsName === "paycor" ||
+    atsName === "recruitingbypaycor.com" ||
+    atsName === "recruitingbypaycorcom" ||
+    atsName === "www.recruitingbypaycor.com" ||
+    atsName === "wwwrecruitingbypaycorcom"
+  ) {
+    return collectPostingsForPaycorCompany(company);
+  }
+  if (
     atsName === "paycomonline" ||
     atsName === "paycomonline.net" ||
     atsName === "paycomonlinenet" ||
@@ -14698,6 +15327,24 @@ async function collectPostingsForCompany(company) {
     atsName === "wwwpaycomonlinenet"
   ) {
     return collectPostingsForPaycomonlineCompany(company);
+  }
+  if (
+    atsName === "prismhr" ||
+    atsName === "prismhr-hire.com" ||
+    atsName === "prismhrhirecom" ||
+    atsName === "www.prismhr-hire.com" ||
+    atsName === "wwwprismhrhirecom"
+  ) {
+    return collectPostingsForPrismhrCompany(company);
+  }
+  if (
+    atsName === "silkroad" ||
+    atsName === "jobs.silkroad.com" ||
+    atsName === "jobssilkroadcom" ||
+    atsName === "www.jobs.silkroad.com" ||
+    atsName === "wwwjobssilkroadcom"
+  ) {
+    return collectPostingsForSilkroadCompany(company);
   }
   if (
     atsName === "adp_workforcenow" ||

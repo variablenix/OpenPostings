@@ -143,6 +143,9 @@ Current sync support includes:
 - `EdJoin`
 - `Webcruiter`
 - `AcademicJobsOnline`
+- `prismhr`
+- `silkroad`
+- `paycor`
 
 <br>
 <img src="README-Images/ATS_list.png" alt="Applications" width="70%" />
@@ -164,11 +167,11 @@ If you are interested in being a beta tester follow the Google Form here:
 ## Android Phone/Device DIRECT Install (Easiest Setup But Still WIP and may have some bugs)
 You can download the latest app from the github releases page and run it. 
 
-- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.7/app-release.apk
+- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.8/app-release.apk
 
 ## Windows Installer Setup (Windows 10/11) (Easiest Setup But Still WIP and may have some bugs)
 Download the latest installer from the github releases page and run it. It will guide you through installation and setup.
-- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.7/openpostings-1.0.7-x64.msi
+- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.8/openpostings-1.0.8-x64.msi
 
 Choose the setup type during install:
 - `Typical`: Installs the standard OpenPostings app setup (Includes the backend service worker, recommended for most users).
