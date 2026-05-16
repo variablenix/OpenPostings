@@ -16,6 +16,8 @@ const CHUNK_SIZE = parsePositiveInteger(process.env.OPENPOSTINGS_LITE_CHUNK_SIZE
 const WINDOW_HOURS = parsePositiveInteger(process.env.OPENPOSTINGS_LITE_WINDOW_HOURS, 24);
 const MAX_ITEMS = parsePositiveInteger(process.env.OPENPOSTINGS_LITE_MAX_ITEMS, 0);
 const MAX_OUTPUT_MB = parsePositiveInteger(process.env.OPENPOSTINGS_LITE_MAX_OUTPUT_MB, 0);
+const API_REQUEST_TIMEOUT_MS = parsePositiveInteger(process.env.OPENPOSTINGS_LITE_API_TIMEOUT_MS, 45000);
+const API_MAX_CONSECUTIVE_ERRORS = parsePositiveInteger(process.env.OPENPOSTINGS_LITE_API_MAX_CONSECUTIVE_ERRORS, 4);
 const REFERENCE_EPOCH =
   parsePositiveInteger(process.env.OPENPOSTINGS_LITE_REFERENCE_EPOCH, 0) || nowEpochSeconds();
 const MAX_OUTPUT_BYTES = MAX_OUTPUT_MB > 0 ? MAX_OUTPUT_MB * 1024 * 1024 : 0;
@@ -305,6 +307,7 @@ async function fetchRowsFromApi(baseUrl) {
   const limit = 2000;
   let offset = 0;
   const rows = [];
+  let consecutiveErrors = 0;
 
   while (true) {
     const requestUrl = new URL(`${sanitizedBase}/postings`);
@@ -315,22 +318,72 @@ async function fetchRowsFromApi(baseUrl) {
     requestUrl.searchParams.set("include_ignored", "1");
     requestUrl.searchParams.set("sort_by", "recent");
 
-    const response = await fetch(requestUrl, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error(`API request failed (${response.status}) for ${requestUrl.toString()}`);
+    try {
+      const response = await fetch(requestUrl, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS)
+      });
+      if (!response.ok) {
+        throw new Error(`API request failed (${response.status}) for ${requestUrl.toString()}`);
+      }
+
+      const payload = await response.json();
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      consecutiveErrors = 0;
+      if (items.length === 0) break;
+
+      rows.push(...items);
+      offset += items.length;
+      console.log(`[lite-chunks] API fetched ${rows.length} rows so far`);
+
+      if (items.length < limit) break;
+    } catch (error) {
+      consecutiveErrors += 1;
+      console.warn(
+        `[lite-chunks] API page request failed (offset=${offset}, consecutive=${consecutiveErrors}): ${String(error?.message || error)}`
+      );
+      if (rows.length > 0 && consecutiveErrors >= API_MAX_CONSECUTIVE_ERRORS) {
+        console.warn("[lite-chunks] Continuing with partial API rows collected so far.");
+        break;
+      }
+      if (rows.length === 0 && consecutiveErrors >= API_MAX_CONSECUTIVE_ERRORS) {
+        throw error;
+      }
     }
-
-    const payload = await response.json();
-    const items = Array.isArray(payload?.items) ? payload.items : [];
-    if (items.length === 0) break;
-
-    rows.push(...items);
-    offset += items.length;
-    console.log(`[lite-chunks] API fetched ${rows.length} rows so far`);
-
-    if (items.length < limit) break;
   }
 
+  return rows;
+}
+
+async function fetchRowsFromDb() {
+  console.log("[lite-chunks] Source mode: SQLite DB");
+  console.log(`[lite-chunks] DB path: ${DB_PATH}`);
+  assertSafeLiteDbPath(DB_PATH);
+
+  const db = await open({
+    filename: DB_PATH,
+    driver: sqlite3.Database,
+    mode: sqlite3.OPEN_READONLY
+  });
+
+  const rows = await db.all(
+    `
+      SELECT
+        id,
+        company_name,
+        position_name,
+        job_posting_url,
+        posting_date,
+        first_seen_epoch,
+        last_seen_epoch
+      FROM Postings
+      WHERE COALESCE(hidden, 0) = 0
+        AND posting_date IS NOT NULL
+        AND TRIM(posting_date) <> '';
+    `
+  );
+
+  await db.close();
   return rows;
 }
 
@@ -354,36 +407,16 @@ async function main() {
   let rows = [];
   if (LITE_API_BASE_URL) {
     console.log(`[lite-chunks] Source mode: API (${LITE_API_BASE_URL})`);
-    rows = await fetchRowsFromApi(LITE_API_BASE_URL);
+    try {
+      rows = await fetchRowsFromApi(LITE_API_BASE_URL);
+    } catch (error) {
+      console.warn(
+        `[lite-chunks] API source unavailable; falling back to DB source. Reason: ${String(error?.message || error)}`
+      );
+      rows = await fetchRowsFromDb();
+    }
   } else {
-    console.log("[lite-chunks] Source mode: SQLite DB");
-    console.log(`[lite-chunks] DB path: ${DB_PATH}`);
-    assertSafeLiteDbPath(DB_PATH);
-
-    const db = await open({
-      filename: DB_PATH,
-      driver: sqlite3.Database,
-      mode: sqlite3.OPEN_READONLY
-    });
-
-    rows = await db.all(
-      `
-        SELECT
-          id,
-          company_name,
-          position_name,
-          job_posting_url,
-          posting_date,
-          first_seen_epoch,
-          last_seen_epoch
-        FROM Postings
-        WHERE COALESCE(hidden, 0) = 0
-          AND posting_date IS NOT NULL
-          AND TRIM(posting_date) <> '';
-      `
-    );
-
-    await db.close();
+    rows = await fetchRowsFromDb();
   }
 
   console.log(`[lite-chunks] Candidate rows with posting_date: ${rows.length}`);

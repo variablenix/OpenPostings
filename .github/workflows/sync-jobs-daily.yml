@@ -82,6 +82,7 @@ jobs:
           fi
 
       - name: Run timed sync pass for Lite dataset
+        continue-on-error: true
         env:
           PORT: 8787
           DB_PATH: ${{ runner.temp }}/openpostings-lite.db
@@ -93,33 +94,58 @@ jobs:
           node server/index.js > "$RUNNER_TEMP/lite-server.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/lite-server.pid"
 
-          node -e "const base='http://127.0.0.1:8787/health';const deadline=Date.now()+180000;const tick=async()=>{while(Date.now()<deadline){try{const r=await fetch(base);if(r.ok){console.log('health ok');return;} }catch{} await new Promise((x)=>setTimeout(x,2000));} throw new Error('server health check timed out');};tick().catch((e)=>{console.error(e);process.exit(1);});"
+          node -e "const base='http://127.0.0.1:8787/health';const deadline=Date.now()+180000;const sleep=(ms)=>new Promise((x)=>setTimeout(x,ms));const tick=async()=>{while(Date.now()<deadline){try{const r=await fetch(base,{signal:AbortSignal.timeout(20000)});if(r.ok){console.log('health ok');return true;}}catch{} await sleep(2000);} console.warn('health check timed out; continuing with best-effort flow'); return false;};tick().then(()=>process.exit(0)).catch((e)=>{console.warn(String(e?.message||e));process.exit(0);});"
 
           node - <<'NODE'
           const fs = require("node:fs");
 
           const base = "http://127.0.0.1:8787";
-          const maxSeconds = Number(process.env.LITE_SYNC_MAX_SECONDS || 120);
+          const maxSeconds = Number(process.env.LITE_SYNC_MAX_SECONDS || 3300);
           const statusPath = `${process.env.RUNNER_TEMP}/lite-sync-status.json`;
 
           function sleep(ms) {
             return new Promise((resolve) => setTimeout(resolve, ms));
           }
 
-          (async () => {
-            const trigger = await fetch(`${base}/sync/ats`, { method: "POST" });
-            if (!trigger.ok) {
-              throw new Error(`Sync trigger failed (${trigger.status})`);
+          async function triggerSync() {
+            try {
+              const trigger = await fetch(`${base}/sync/ats`, {
+                method: "POST",
+                signal: AbortSignal.timeout(30000)
+              });
+              if (!trigger.ok) {
+                console.warn(`[lite-sync] trigger failed (${trigger.status}); continuing anyway`);
+                return false;
+              }
+              return true;
+            } catch (error) {
+              console.warn(`[lite-sync] trigger error: ${String(error?.message || error)}`);
+              return false;
             }
+          }
 
+          (async () => {
+            let triggerStarted = await triggerSync();
             const deadline = Date.now() + maxSeconds * 1000;
             let lastLogMs = 0;
             let finalStatus = null;
+            let consecutiveStatusErrors = 0;
             while (true) {
-              const response = await fetch(`${base}/sync/status`);
-              if (response.ok) {
+              if (Date.now() >= deadline) {
+                console.log("[lite-sync] reached sync time budget; continuing with partial synced data");
+                break;
+              }
+
+              try {
+                const response = await fetch(`${base}/sync/status`, {
+                  signal: AbortSignal.timeout(30000)
+                });
+                if (!response.ok) {
+                  throw new Error(`status failed (${response.status})`);
+                }
                 const payload = await response.json();
                 finalStatus = payload;
+                consecutiveStatusErrors = 0;
 
                 const now = Date.now();
                 if (now - lastLogMs >= 30000) {
@@ -134,13 +160,21 @@ jobs:
                   lastLogMs = now;
                 }
 
-                if (!payload?.running) {
+                if (!triggerStarted && !payload?.running) {
+                  triggerStarted = await triggerSync();
+                }
+
+                if (!payload?.running && triggerStarted) {
                   console.log("[lite-sync] sync finished within time budget");
                   break;
                 }
-
-                if (Date.now() >= deadline) {
-                  console.log("[lite-sync] reached sync time budget; continuing with partial synced data");
+              } catch (error) {
+                consecutiveStatusErrors += 1;
+                console.warn(
+                  `[lite-sync] status check failed (${consecutiveStatusErrors}): ${String(error?.message || error)}`
+                );
+                if (consecutiveStatusErrors >= 8) {
+                  console.warn("[lite-sync] too many status failures; continuing with partial synced data");
                   break;
                 }
               }
@@ -149,8 +183,8 @@ jobs:
 
             fs.writeFileSync(statusPath, `${JSON.stringify(finalStatus || {}, null, 2)}\n`, "utf8");
           })().catch((error) => {
-            console.error(error);
-            process.exit(1);
+            console.warn(`[lite-sync] non-fatal sync step error: ${String(error?.message || error)}`);
+            process.exit(0);
           });
           NODE
 
@@ -162,7 +196,26 @@ jobs:
           OPENPOSTINGS_LITE_CHUNK_SIZE: 300
           OPENPOSTINGS_LITE_WINDOW_HOURS: 24
           OPENPOSTINGS_LITE_MAX_OUTPUT_MB: 400
-        run: npm run lite:build-chunks
+        run: |
+          set +e
+          npm run lite:build-chunks
+          BUILD_EXIT_CODE=$?
+          set -e
+
+          if [ ! -f "${GITHUB_WORKSPACE}/docs-site/static/lite-data/index.json" ]; then
+            echo "Lite chunk build produced no index.json; failing run."
+            exit 1
+          fi
+
+          CHUNK_COUNT=$(node -e "const fs=require('node:fs');const p='${GITHUB_WORKSPACE}/docs-site/static/lite-data/index.json';const payload=JSON.parse(fs.readFileSync(p,'utf8'));const n=Number(payload?.total_chunks||0);process.stdout.write(String(Number.isFinite(n)?n:0));")
+          if [ "${CHUNK_COUNT}" -le 0 ]; then
+            echo "Lite chunk build produced zero chunks; failing run."
+            exit 1
+          fi
+
+          if [ "${BUILD_EXIT_CODE}" -ne 0 ]; then
+            echo "Chunk command exited non-zero, but ${CHUNK_COUNT} chunk(s) exist; continuing deploy."
+          fi
 
       - name: Stop Lite sync server
         if: always()
