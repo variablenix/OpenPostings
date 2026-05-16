@@ -211,7 +211,10 @@ const MCP_SETTINGS_DEFAULTS = {
 };
 const ATS_FILTER_OPTIONS = new Set([
   "adp_myjobs",
+  "paycor",
   "paycomonline",
+  "prismhr",
+  "silkroad",
   "adp_workforcenow",
   "applitrack",
   "applicantai",
@@ -420,7 +423,12 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes(".jobs.hr.cloud.sap/job/")) return "saphrcloud";
   if (url.includes(".jobs.hr.cloud.sap/search/")) return "saphrcloud";
   if (url.includes("myjobs.adp.com/") && url.includes("/cx/job-details")) return "adp_myjobs";
+  if (url.includes("recruitingbypaycor.com/career/jobintroduction.action")) return "paycor";
   if (url.includes("paycomonline.net/v4/ats/web.php/jobs/viewjobdetails?job=")) return "paycomonline";
+  if (url.includes(".prismhr-hire.com/job/")) return "prismhr";
+  if (url.includes(".prismhr-hire.com")) return "prismhr";
+  if (url.includes("jobs.silkroad.com/") && url.includes("/careers/jobs/")) return "silkroad";
+  if (url.includes("www.jobs.silkroad.com/") && url.includes("/careers/jobs/")) return "silkroad";
   if (url.includes("workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html")) return "adp_workforcenow";
   if (url.includes("workforcenow.adp.com/jobs/apply/posting.html")) return "adp_workforcenow";
   if (url.includes("careerspage.io/")) {
@@ -676,6 +684,15 @@ function normalizeAtsFilters(value) {
       }
       if (normalized === "adp_myjobs" || normalized === "adpmyjobs") return "adp_myjobs";
       if (
+        normalized === "paycor" ||
+        normalized === "recruitingbypaycor.com" ||
+        normalized === "recruitingbypaycorcom" ||
+        normalized === "www.recruitingbypaycor.com" ||
+        normalized === "wwwrecruitingbypaycorcom"
+      ) {
+        return "paycor";
+      }
+      if (
         normalized === "paycomonline" ||
         normalized === "paycomonline.net" ||
         normalized === "paycomonlinenet" ||
@@ -683,6 +700,24 @@ function normalizeAtsFilters(value) {
         normalized === "wwwpaycomonlinenet"
       ) {
         return "paycomonline";
+      }
+      if (
+        normalized === "prismhr" ||
+        normalized === "prismhr-hire.com" ||
+        normalized === "prismhrhirecom" ||
+        normalized === "www.prismhr-hire.com" ||
+        normalized === "wwwprismhrhirecom"
+      ) {
+        return "prismhr";
+      }
+      if (
+        normalized === "silkroad" ||
+        normalized === "jobs.silkroad.com" ||
+        normalized === "jobssilkroadcom" ||
+        normalized === "www.jobs.silkroad.com" ||
+        normalized === "wwwjobssilkroadcom"
+      ) {
+        return "silkroad";
       }
       if (normalized === "adp_workforcenow" || normalized === "adpworkforcenow" || normalized === "workforcenow.adp.com" || normalized === "workforcenowadpcom") {
         return "adp_workforcenow";

@@ -163,7 +163,10 @@ const MIN_POSTING_FRESHNESS_HOURS = 24;
 const MAX_POSTING_FRESHNESS_HOURS = 24 * 7;
 const DEFAULT_ATS_FILTER_OPTIONS = [
   { value: "adp_myjobs", label: "ADP MyJobs" },
+  { value: "paycor", label: "Paycor" },
   { value: "paycomonline", label: "PaycomOnline" },
+  { value: "prismhr", label: "PrismHR" },
+  { value: "silkroad", label: "SilkRoad" },
   { value: "adp_workforcenow", label: "ADP Workforce Now" },
   { value: "applicantai", label: "ApplicantAI" },
   { value: "applitrack", label: "Applitrack" },
@@ -248,7 +251,10 @@ const DEFAULT_ATS_FILTER_OPTIONS = [
 ];
 const ATS_LABEL_BY_VALUE = {
   adp_myjobs: "ADP MyJobs",
+  paycor: "Paycor",
   paycomonline: "PaycomOnline",
+  prismhr: "PrismHR",
+  silkroad: "SilkRoad",
   adp_workforcenow: "ADP Workforce Now",
   applicantai: "ApplicantAI",
   applitrack: "Applitrack",
@@ -607,7 +613,18 @@ function normalizeAtsValue(value) {
     return "talentreef";
   }
   if (normalized === "adp_myjobs" || normalized === "adpmyjobs") return "adp_myjobs";
+  if (
+    normalized === "paycor" ||
+    normalized === "recruitingbypaycor.com" ||
+    normalized === "recruitingbypaycorcom" ||
+    normalized === "www.recruitingbypaycor.com" ||
+    normalized === "wwwrecruitingbypaycorcom"
+  ) {
+    return "paycor";
+  }
   if (normalized === "paycomonline" || normalized === "paycomonline.net" || normalized === "paycomonlinenet" || normalized === "www.paycomonline.net" || normalized === "wwwpaycomonlinenet") return "paycomonline";
+  if (normalized === "prismhr" || normalized === "prismhr-hire.com" || normalized === "prismhrhirecom" || normalized === "www.prismhr-hire.com" || normalized === "wwwprismhrhirecom") return "prismhr";
+  if (normalized === "silkroad" || normalized === "jobs.silkroad.com" || normalized === "jobssilkroadcom" || normalized === "www.jobs.silkroad.com" || normalized === "wwwjobssilkroadcom") return "silkroad";
   if (
     normalized === "paylocity" ||
     normalized === "paylocity.com" ||

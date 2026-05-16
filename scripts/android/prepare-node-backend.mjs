@@ -77,13 +77,26 @@ function boot() {
     runtime_root: runtimeRoot
   });
 
-  // Execute backend from bundled assets so Node dependency resolution can use bundled node_modules.
-  require(path.join(bundledBackendRoot, "server", "index.js"));
+  const backendModule = require(path.join(bundledBackendRoot, "server", "index.js"));
+  if (backendModule && typeof backendModule.start === "function") {
+    Promise.resolve(backendModule.start()).catch((error) => {
+      const message = String(error?.stack || error?.message || error);
+      console.error("[OpenPostings Android backend] server start failed:", message);
+      rnBridge.channel.send({
+        type: "backend_runtime_failed",
+        message
+      });
+    });
+  }
 }
 
 try {
   boot();
 } catch (error) {
+  console.error(
+    "[OpenPostings Android backend] startup failed:",
+    String(error?.stack || error?.message || error)
+  );
   rnBridge.channel.send({
     type: "backend_runtime_failed",
     message: String(error?.stack || error?.message || error)
