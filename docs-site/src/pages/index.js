@@ -49,6 +49,14 @@ export default function Home() {
   const loadMoreSentinelRef = useRef(null);
 
   useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    document.body.classList.add("lite-homepage");
+    return () => {
+      document.body.classList.remove("lite-homepage");
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     const loadIndex = async () => {
       try {
@@ -195,10 +203,7 @@ export default function Home() {
       <main className={styles.page}>
         <section className={styles.headerCard}>
           <div className={styles.headerTopRow}>
-            <h1 className={styles.title}>OpenPostings Lite</h1>
-            <Link className={styles.docsLink} to="/docs/intro">
-              Docs
-            </Link>
+            <h1 className={styles.title} style={{ textAlign: "center" }}>OpenPostings Lite</h1>
           </div>
           <p className={styles.subtitle} style={{ textAlign: "center" }}>
             The lite version of OpenPostings (Core)
