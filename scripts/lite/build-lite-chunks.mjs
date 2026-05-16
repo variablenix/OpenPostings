@@ -11,6 +11,7 @@ const projectRoot = path.resolve(__dirname, "..", "..");
 const DB_PATH = process.env.OPENPOSTINGS_LITE_DB_PATH || path.resolve(projectRoot, "jobs_github.db");
 const OUTPUT_DIR =
   process.env.OPENPOSTINGS_LITE_OUTPUT_DIR || path.resolve(projectRoot, "docs-site", "static", "lite-data");
+const LITE_API_BASE_URL = String(process.env.OPENPOSTINGS_LITE_API_BASE_URL || "").trim();
 const CHUNK_SIZE = parsePositiveInteger(process.env.OPENPOSTINGS_LITE_CHUNK_SIZE, 300);
 const WINDOW_HOURS = parsePositiveInteger(process.env.OPENPOSTINGS_LITE_WINDOW_HOURS, 24);
 const MAX_ITEMS = parsePositiveInteger(process.env.OPENPOSTINGS_LITE_MAX_ITEMS, 0);
@@ -163,6 +164,127 @@ function inferPostingLocationFromJobUrl(jobPostingUrl) {
   }
 }
 
+const US_STATE_CODES = new Set([
+  "AL",
+  "AK",
+  "AZ",
+  "AR",
+  "CA",
+  "CO",
+  "CT",
+  "DE",
+  "FL",
+  "GA",
+  "HI",
+  "ID",
+  "IL",
+  "IN",
+  "IA",
+  "KS",
+  "KY",
+  "LA",
+  "ME",
+  "MD",
+  "MA",
+  "MI",
+  "MN",
+  "MS",
+  "MO",
+  "MT",
+  "NE",
+  "NV",
+  "NH",
+  "NJ",
+  "NM",
+  "NY",
+  "NC",
+  "ND",
+  "OH",
+  "OK",
+  "OR",
+  "PA",
+  "RI",
+  "SC",
+  "SD",
+  "TN",
+  "TX",
+  "UT",
+  "VT",
+  "VA",
+  "WA",
+  "WV",
+  "WI",
+  "WY",
+  "DC"
+]);
+
+const COUNTRY_ALIAS_ENTRIES = [
+  ["united states", "United States"],
+  ["u.s.", "United States"],
+  ["u.s.a.", "United States"],
+  ["usa", "United States"],
+  ["canada", "Canada"],
+  ["united kingdom", "United Kingdom"],
+  ["uk", "United Kingdom"],
+  ["great britain", "United Kingdom"],
+  ["australia", "Australia"],
+  ["new zealand", "New Zealand"],
+  ["germany", "Germany"],
+  ["france", "France"],
+  ["spain", "Spain"],
+  ["italy", "Italy"],
+  ["ireland", "Ireland"],
+  ["india", "India"],
+  ["singapore", "Singapore"],
+  ["japan", "Japan"],
+  ["mexico", "Mexico"],
+  ["brazil", "Brazil"],
+  ["netherlands", "Netherlands"],
+  ["belgium", "Belgium"],
+  ["sweden", "Sweden"],
+  ["norway", "Norway"],
+  ["denmark", "Denmark"],
+  ["finland", "Finland"],
+  ["switzerland", "Switzerland"],
+  ["poland", "Poland"],
+  ["austria", "Austria"],
+  ["portugal", "Portugal"],
+  ["south africa", "South Africa"]
+];
+
+function inferRemoteModeFromLocation(locationText) {
+  const normalized = String(locationText || "").trim().toLowerCase();
+  if (!normalized) return "non_remote";
+  if (normalized.includes("hybrid")) return "hybrid";
+  if (normalized.includes("remote") || normalized.includes("work from home") || normalized.includes("wfh")) {
+    return "remote";
+  }
+  return "non_remote";
+}
+
+function inferCountryFromLocation(locationText) {
+  const raw = String(locationText || "").trim();
+  if (!raw) return "Unknown";
+
+  const normalized = raw.toLowerCase();
+  for (const [needle, country] of COUNTRY_ALIAS_ENTRIES) {
+    if (normalized.includes(needle)) return country;
+  }
+
+  const parts = raw
+    .split(",")
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+  const lastPart = parts.length > 0 ? parts[parts.length - 1] : "";
+  const secondLast = parts.length > 1 ? parts[parts.length - 2] : "";
+
+  if (US_STATE_CODES.has(String(lastPart).toUpperCase()) || US_STATE_CODES.has(String(secondLast).toUpperCase())) {
+    return "United States";
+  }
+
+  return "Unknown";
+}
+
 function formatDurationMs(durationMs) {
   const seconds = durationMs / 1000;
   if (seconds < 60) return `${seconds.toFixed(2)}s`;
@@ -174,6 +296,42 @@ function formatDurationMs(durationMs) {
 async function clearOutputDirectory(outputDirectoryPath) {
   await fs.rm(outputDirectoryPath, { recursive: true, force: true });
   await fs.mkdir(outputDirectoryPath, { recursive: true });
+}
+
+async function fetchRowsFromApi(baseUrl) {
+  const sanitizedBase = String(baseUrl || "").trim().replace(/\/+$/, "");
+  if (!sanitizedBase) throw new Error("OPENPOSTINGS_LITE_API_BASE_URL is empty.");
+
+  const limit = 2000;
+  let offset = 0;
+  const rows = [];
+
+  while (true) {
+    const requestUrl = new URL(`${sanitizedBase}/postings`);
+    requestUrl.searchParams.set("limit", String(limit));
+    requestUrl.searchParams.set("offset", String(offset));
+    requestUrl.searchParams.set("hide_no_date", "1");
+    requestUrl.searchParams.set("include_applied", "1");
+    requestUrl.searchParams.set("include_ignored", "1");
+    requestUrl.searchParams.set("sort_by", "recent");
+
+    const response = await fetch(requestUrl, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`API request failed (${response.status}) for ${requestUrl.toString()}`);
+    }
+
+    const payload = await response.json();
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    if (items.length === 0) break;
+
+    rows.push(...items);
+    offset += items.length;
+    console.log(`[lite-chunks] API fetched ${rows.length} rows so far`);
+
+    if (items.length < limit) break;
+  }
+
+  return rows;
 }
 
 async function main() {
@@ -191,34 +349,42 @@ async function main() {
   }
   console.log(`[lite-chunks] Reference time: ${referenceIso}`);
 
-  assertSafeLiteDbPath(DB_PATH);
-
   await clearOutputDirectory(OUTPUT_DIR);
 
-  const db = await open({
-    filename: DB_PATH,
-    driver: sqlite3.Database,
-    mode: sqlite3.OPEN_READONLY
-  });
+  let rows = [];
+  if (LITE_API_BASE_URL) {
+    console.log(`[lite-chunks] Source mode: API (${LITE_API_BASE_URL})`);
+    rows = await fetchRowsFromApi(LITE_API_BASE_URL);
+  } else {
+    console.log("[lite-chunks] Source mode: SQLite DB");
+    console.log(`[lite-chunks] DB path: ${DB_PATH}`);
+    assertSafeLiteDbPath(DB_PATH);
 
-  const rows = await db.all(
-    `
-      SELECT
-        id,
-        company_name,
-        position_name,
-        job_posting_url,
-        posting_date,
-        first_seen_epoch,
-        last_seen_epoch
-      FROM Postings
-      WHERE COALESCE(hidden, 0) = 0
-        AND posting_date IS NOT NULL
-        AND TRIM(posting_date) <> '';
-    `
-  );
+    const db = await open({
+      filename: DB_PATH,
+      driver: sqlite3.Database,
+      mode: sqlite3.OPEN_READONLY
+    });
 
-  await db.close();
+    rows = await db.all(
+      `
+        SELECT
+          id,
+          company_name,
+          position_name,
+          job_posting_url,
+          posting_date,
+          first_seen_epoch,
+          last_seen_epoch
+        FROM Postings
+        WHERE COALESCE(hidden, 0) = 0
+          AND posting_date IS NOT NULL
+          AND TRIM(posting_date) <> '';
+      `
+    );
+
+    await db.close();
+  }
 
   console.log(`[lite-chunks] Candidate rows with posting_date: ${rows.length}`);
 
@@ -244,6 +410,8 @@ async function main() {
       continue;
     }
 
+    const resolvedLocation = String(row?.location || "").trim() || inferPostingLocationFromJobUrl(row?.job_posting_url);
+
     filtered.push({
       id: Number(row?.id || 0),
       company_name: String(row?.company_name || "").trim(),
@@ -253,8 +421,10 @@ async function main() {
       posting_epoch: Number(parsedEpoch),
       first_seen_epoch: Number(row?.first_seen_epoch || 0),
       last_seen_epoch: Number(row?.last_seen_epoch || 0),
-      ats: inferAtsFromJobPostingUrl(row?.job_posting_url),
-      location: inferPostingLocationFromJobUrl(row?.job_posting_url)
+      ats: String(row?.ats || "").trim() || inferAtsFromJobPostingUrl(row?.job_posting_url),
+      location: resolvedLocation,
+      remote_mode: inferRemoteModeFromLocation(resolvedLocation),
+      country: inferCountryFromLocation(resolvedLocation)
     });
   }
 
@@ -281,7 +451,7 @@ async function main() {
 
     const payload = {
       chunk_index: index + 1,
-      total_chunks: totalChunks,
+      total_chunks: totalChunksPlanned,
       count: items.length,
       generated_at: new Date().toISOString(),
       items

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Layout from "@theme/Layout";
-import Link from "@docusaurus/Link";
 import useBaseUrl from "@docusaurus/useBaseUrl";
 import styles from "./index.module.css";
 
@@ -14,6 +13,152 @@ function formatPostingDate(postingDate, postingEpoch) {
   const dateText = String(postingDate || "").trim();
   if (dateText) return dateText;
   return formatEpoch(postingEpoch) || "Posting date unavailable";
+}
+
+const REMOTE_FILTER_OPTIONS = [
+  { value: "all", label: "All Locations" },
+  { value: "remote", label: "Remote Only" },
+  { value: "hybrid", label: "Hybrid Only" },
+  { value: "non_remote", label: "On-Site / Unknown" }
+];
+
+const COUNTRY_ALIAS_ENTRIES = [
+  ["united states", "United States"],
+  ["u.s.", "United States"],
+  ["u.s.a.", "United States"],
+  ["usa", "United States"],
+  ["canada", "Canada"],
+  ["united kingdom", "United Kingdom"],
+  ["uk", "United Kingdom"],
+  ["great britain", "United Kingdom"],
+  ["australia", "Australia"],
+  ["new zealand", "New Zealand"],
+  ["germany", "Germany"],
+  ["france", "France"],
+  ["spain", "Spain"],
+  ["italy", "Italy"],
+  ["ireland", "Ireland"],
+  ["india", "India"],
+  ["singapore", "Singapore"],
+  ["japan", "Japan"],
+  ["mexico", "Mexico"],
+  ["brazil", "Brazil"],
+  ["netherlands", "Netherlands"],
+  ["belgium", "Belgium"],
+  ["sweden", "Sweden"],
+  ["norway", "Norway"],
+  ["denmark", "Denmark"],
+  ["finland", "Finland"],
+  ["switzerland", "Switzerland"],
+  ["poland", "Poland"],
+  ["austria", "Austria"],
+  ["portugal", "Portugal"],
+  ["south africa", "South Africa"]
+];
+
+const US_STATE_CODES = new Set([
+  "AL",
+  "AK",
+  "AZ",
+  "AR",
+  "CA",
+  "CO",
+  "CT",
+  "DE",
+  "FL",
+  "GA",
+  "HI",
+  "ID",
+  "IL",
+  "IN",
+  "IA",
+  "KS",
+  "KY",
+  "LA",
+  "ME",
+  "MD",
+  "MA",
+  "MI",
+  "MN",
+  "MS",
+  "MO",
+  "MT",
+  "NE",
+  "NV",
+  "NH",
+  "NJ",
+  "NM",
+  "NY",
+  "NC",
+  "ND",
+  "OH",
+  "OK",
+  "OR",
+  "PA",
+  "RI",
+  "SC",
+  "SD",
+  "TN",
+  "TX",
+  "UT",
+  "VT",
+  "VA",
+  "WA",
+  "WV",
+  "WI",
+  "WY",
+  "DC"
+]);
+
+function inferRemoteModeFromLocation(locationText) {
+  const normalized = String(locationText || "").trim().toLowerCase();
+  if (!normalized) return "non_remote";
+  if (normalized.includes("hybrid")) return "hybrid";
+  if (normalized.includes("remote") || normalized.includes("work from home") || normalized.includes("wfh")) {
+    return "remote";
+  }
+  return "non_remote";
+}
+
+function inferCountryFromLocation(locationText) {
+  const raw = String(locationText || "").trim();
+  if (!raw) return "Unknown";
+
+  const normalized = raw.toLowerCase();
+  for (const [needle, country] of COUNTRY_ALIAS_ENTRIES) {
+    if (normalized.includes(needle)) return country;
+  }
+
+  const parts = raw
+    .split(",")
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+  const lastPart = parts.length > 0 ? parts[parts.length - 1] : "";
+  const secondLast = parts.length > 1 ? parts[parts.length - 2] : "";
+
+  if (US_STATE_CODES.has(String(lastPart).toUpperCase()) || US_STATE_CODES.has(String(secondLast).toUpperCase())) {
+    return "United States";
+  }
+
+  return "Unknown";
+}
+
+function getCountryForItem(item) {
+  const explicit = String(item?.country || "").trim();
+  if (explicit) return explicit;
+  return inferCountryFromLocation(item?.location);
+}
+
+function getRemoteModeForItem(item) {
+  const explicit = String(item?.remote_mode || "").trim();
+  if (explicit === "remote" || explicit === "hybrid" || explicit === "non_remote") return explicit;
+  return inferRemoteModeFromLocation(item?.location);
+}
+
+function getRemoteModeLabel(value) {
+  if (value === "remote") return "Remote";
+  if (value === "hybrid") return "Hybrid";
+  return "On-Site / Unknown";
 }
 
 function LoadingState() {
@@ -46,6 +191,9 @@ export default function Home() {
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [atsFilter, setAtsFilter] = useState("all");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [remoteFilter, setRemoteFilter] = useState("all");
   const loadMoreSentinelRef = useRef(null);
 
   useEffect(() => {
@@ -125,18 +273,45 @@ export default function Home() {
     return Array.from(values).sort((a, b) => a.localeCompare(b));
   }, [loadedItems]);
 
+  const countryOptions = useMemo(() => {
+    const values = new Set();
+    for (const item of loadedItems) {
+      const country = getCountryForItem(item);
+      if (country && country !== "Unknown") values.add(country);
+    }
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }, [loadedItems]);
+
+  const locationOptions = useMemo(() => {
+    const values = new Set();
+    for (const item of loadedItems) {
+      const location = String(item?.location || "").trim();
+      if (!location) continue;
+      const country = getCountryForItem(item);
+      if (countryFilter !== "all" && country !== countryFilter) continue;
+      values.add(location);
+    }
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }, [countryFilter, loadedItems]);
+
   const filteredItems = useMemo(() => {
     const query = String(searchQuery || "").trim().toLowerCase();
     return loadedItems.filter((item) => {
       const matchesAts = atsFilter === "all" || String(item?.ats || "").trim() === atsFilter;
       if (!matchesAts) return false;
+      const itemCountry = getCountryForItem(item);
+      if (countryFilter !== "all" && itemCountry !== countryFilter) return false;
+      const itemLocation = String(item?.location || "").trim();
+      if (locationFilter !== "all" && itemLocation !== locationFilter) return false;
+      const itemRemoteMode = getRemoteModeForItem(item);
+      if (remoteFilter !== "all" && itemRemoteMode !== remoteFilter) return false;
       if (!query) return true;
       const company = String(item?.company_name || "").toLowerCase();
       const title = String(item?.position_name || "").toLowerCase();
       const location = String(item?.location || "").toLowerCase();
       return company.includes(query) || title.includes(query) || location.includes(query);
     });
-  }, [loadedItems, searchQuery, atsFilter]);
+  }, [loadedItems, searchQuery, atsFilter, countryFilter, locationFilter, remoteFilter]);
 
   const loadNextChunk = useCallback(async () => {
     if (!meta || loadingChunk) return;
@@ -190,6 +365,9 @@ export default function Home() {
     setSearchInput("");
     setSearchQuery("");
     setAtsFilter("all");
+    setCountryFilter("all");
+    setLocationFilter("all");
+    setRemoteFilter("all");
   };
 
   const syncStatusText = meta?.reference_iso
@@ -248,9 +426,52 @@ export default function Home() {
                 </option>
               ))}
             </select>
+            <select
+              className={styles.selectInput}
+              value={countryFilter}
+              onChange={(event) => {
+                setCountryFilter(event.target.value);
+                setLocationFilter("all");
+              }}
+            >
+              <option value="all">All Countries</option>
+              {countryOptions.map((country) => (
+                <option key={country} value={country}>
+                  {country}
+                </option>
+              ))}
+            </select>
+            <select className={styles.selectInput} value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
+              <option value="all">All Locations</option>
+              {locationOptions.map((location) => (
+                <option key={location} value={location}>
+                  {location}
+                </option>
+              ))}
+            </select>
             <button type="button" className={styles.clearButton} onClick={clearFilters}>
               Clear
             </button>
+          </div>
+          <div className={styles.remoteFilterGroup}>
+            <div className={styles.remoteFilterLabel}>Remote Filter</div>
+            <div className={styles.remoteFilterChipsRow}>
+              {REMOTE_FILTER_OPTIONS.map((option) => {
+                const selected = remoteFilter === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`${styles.remoteFilterChip} ${selected ? styles.remoteFilterChipActive : ""}`.trim()}
+                    onClick={() => setRemoteFilter(option.value)}
+                  >
+                    <span className={`${styles.remoteFilterChipText} ${selected ? styles.remoteFilterChipTextActive : ""}`.trim()}>
+                      {option.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div className={styles.syncStatus}>{syncStatusText}</div>
           <div className={styles.filterSummary} style={{ textAlign: "center" }}>
@@ -277,6 +498,8 @@ export default function Home() {
                 <div className={styles.cardCompany}>{item.company_name || "Unknown Company"}</div>
                 <div className={styles.cardMeta}>ATS: {item.ats || "unknown"}</div>
                 <div className={styles.cardMeta}>Location: {item.location || "Location unavailable"}</div>
+                <div className={styles.cardMeta}>Country: {getCountryForItem(item)}</div>
+                <div className={styles.cardMeta}>Remote: {getRemoteModeLabel(getRemoteModeForItem(item))}</div>
                 <div className={styles.cardMeta}>Posting date: {formatPostingDate(item.posting_date, item.posting_epoch)}</div>
                 <a className={styles.cardUrl} href={item.job_posting_url} target="_blank" rel="noreferrer">
                   {item.job_posting_url}

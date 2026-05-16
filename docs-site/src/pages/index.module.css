@@ -80,7 +80,7 @@
 .controlsRow {
   margin-top: 0.55rem;
   display: grid;
-  grid-template-columns: minmax(220px, 300px) 96px;
+  grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) minmax(220px, 1fr) 96px;
   gap: 0.5rem;
 }
 
@@ -132,6 +132,46 @@
   margin-top: 0.25rem;
   font-size: 0.86rem;
   color: #52606d;
+}
+
+.remoteFilterGroup {
+  margin-top: 0.7rem;
+}
+
+.remoteFilterLabel {
+  font-size: 0.88rem;
+  color: #334e68;
+  margin-bottom: 0.35rem;
+}
+
+.remoteFilterChipsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+}
+
+.remoteFilterChip {
+  border: 1px solid #c6ceda;
+  border-radius: 999px;
+  background: #fff;
+  min-height: 34px;
+  padding: 0 0.8rem;
+  cursor: pointer;
+}
+
+.remoteFilterChipActive {
+  background: #102a43;
+  border-color: #102a43;
+}
+
+.remoteFilterChipText {
+  color: #486581;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.remoteFilterChipTextActive {
+  color: #fff;
 }
 
 .emptyState {

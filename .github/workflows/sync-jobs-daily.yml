@@ -154,6 +154,16 @@ jobs:
           });
           NODE
 
+      - name: Build Lite chunk files
+        env:
+          OPENPOSTINGS_LITE_API_BASE_URL: http://127.0.0.1:8787
+          OPENPOSTINGS_LITE_DB_PATH: ${{ runner.temp }}/openpostings-lite.db
+          OPENPOSTINGS_LITE_OUTPUT_DIR: ${{ github.workspace }}/docs-site/static/lite-data
+          OPENPOSTINGS_LITE_CHUNK_SIZE: 300
+          OPENPOSTINGS_LITE_WINDOW_HOURS: 24
+          OPENPOSTINGS_LITE_MAX_OUTPUT_MB: 400
+        run: npm run lite:build-chunks
+
       - name: Stop Lite sync server
         if: always()
         run: |
@@ -162,15 +172,6 @@ jobs:
             sleep 2
             kill -9 "$(cat "$RUNNER_TEMP/lite-server.pid")" 2>/dev/null || true
           fi
-
-      - name: Build Lite chunk files
-        env:
-          OPENPOSTINGS_LITE_DB_PATH: ${{ runner.temp }}/openpostings-lite.db
-          OPENPOSTINGS_LITE_OUTPUT_DIR: ${{ github.workspace }}/docs-site/static/lite-data
-          OPENPOSTINGS_LITE_CHUNK_SIZE: 300
-          OPENPOSTINGS_LITE_WINDOW_HOURS: 24
-          OPENPOSTINGS_LITE_MAX_OUTPUT_MB: 400
-        run: npm run lite:build-chunks
 
       - name: Install docs dependencies
         run: npm ci
