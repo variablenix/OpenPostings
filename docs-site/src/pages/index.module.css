@@ -1,23 +1,203 @@
-/**
- * CSS files with the .module.css suffix will be treated as CSS modules
- * and scoped locally.
- */
-
-.heroBanner {
-  padding: 4rem 0;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
+.page {
+  margin: 0 auto;
+  max-width: 1280px;
+  padding: 0.5rem 0.25rem 2.5rem;
+  color: #334e68;
 }
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem;
-  }
+.headerCard,
+.filterCard,
+.card,
+.emptyState {
+  border: 1px solid #dbe2ea;
+  border-radius: 12px;
+  background: #f8fafc;
 }
 
-.buttons {
+.headerCard {
+  padding: 0.9rem;
+}
+
+.headerTopRow {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.1;
+  color: #102a43;
+}
+
+.docsLink {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  min-height: 36px;
+  border: 1px solid #c6ceda;
+  border-radius: 999px;
+  padding: 0 0.9rem;
+  background: #fff;
+  color: #102a43;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.subtitle {
+  margin: 0.6rem 0 0.4rem;
+  color: #486581;
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+  color: #52606d;
+}
+
+.filterCard {
+  margin-top: 0.9rem;
+  padding: 0.75rem;
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #102a43;
+  margin-bottom: 0.5rem;
+}
+
+.searchRow {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 170px;
+  gap: 0.5rem;
+}
+
+.controlsRow {
+  margin-top: 0.55rem;
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 96px;
+  gap: 0.5rem;
+}
+
+.searchInput,
+.selectInput,
+.clearButton,
+.primaryActionButton {
+  height: 38px;
+  border-radius: 10px;
+  font-size: 0.98rem;
+  border: 1px solid #c6ceda;
+}
+
+.searchInput,
+.selectInput {
+  background: #fff;
+  color: #334e68;
+  padding: 0 0.8rem;
+}
+
+.primaryActionButton {
+  background: #0b6e4f;
+  border-color: #0b6e4f;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.clearButton {
+  background: #fff;
+  color: #7a8798;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryActionButton:disabled,
+.clearButton:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.syncStatus {
+  margin-top: 0.55rem;
+  font-size: 0.85rem;
+  color: #486581;
+}
+
+.filterSummary {
+  margin-top: 0.25rem;
+  font-size: 0.86rem;
+  color: #52606d;
+}
+
+.emptyState {
+  margin-top: 0.9rem;
+  padding: 0.95rem;
+}
+
+.emptyTitle {
+  font-weight: 700;
+  color: #102a43;
+}
+
+.emptySubtitle {
+  margin-top: 0.3rem;
+  color: #486581;
+}
+
+.list {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.card {
+  padding: 0.8rem;
+}
+
+.cardTitle {
+  margin: 0;
+  color: #102a43;
+  font-size: 1.14rem;
+}
+
+.cardCompany {
+  margin-top: 0.34rem;
+  color: #334e68;
+}
+
+.cardMeta {
+  margin-top: 0.22rem;
+  color: #52606d;
+  font-size: 0.9rem;
+}
+
+.cardUrl {
+  display: block;
+  margin-top: 0.42rem;
+  color: #486581;
+  font-size: 0.88rem;
+  word-break: break-word;
+}
+
+.loadMoreHint {
+  margin-top: 0.85rem;
+  text-align: center;
+  color: #52606d;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.2rem;
+}
+
+@media (max-width: 900px) {
+  .searchRow {
+    grid-template-columns: 1fr;
+  }
+
+  .controlsRow {
+    grid-template-columns: 1fr;
+  }
 }
