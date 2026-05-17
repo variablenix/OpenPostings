@@ -230,7 +230,7 @@ export default function Home() {
   }, [dataBaseUrl]);
 
   useEffect(() => {
-    if (!meta || loadingChunk || loadedChunkCount > 0) return;
+    if (!meta || loadedChunkCount > 0) return;
     const firstChunkFile = Array.isArray(meta?.chunks) && meta.chunks[0]?.file ? meta.chunks[0].file : "";
     if (!firstChunkFile) return;
 
@@ -257,7 +257,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [meta, loadingChunk, loadedChunkCount, dataBaseUrl]);
+  }, [meta, loadedChunkCount, dataBaseUrl]);
 
   const hasMoreChunks = useMemo(() => {
     const totalChunks = Number(meta?.total_chunks || 0);
