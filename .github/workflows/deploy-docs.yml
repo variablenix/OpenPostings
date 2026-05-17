@@ -18,6 +18,7 @@ jobs:
     env:
       GITHUB_OWNER: ${{ github.repository_owner }}
       GITHUB_REPO: ${{ github.event.repository.name }}
+      LITE_DATA_SOURCE_URL: https://masterjx9.github.io/OpenPostings/lite-data
 
     steps:
       - name: Checkout
@@ -36,6 +37,58 @@ jobs:
       - name: Install docs dependencies
         run: npm ci
         working-directory: docs-site
+
+      - name: Reuse published Lite data
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs/promises");
+          const path = require("node:path");
+
+          const sourceBase = String(process.env.LITE_DATA_SOURCE_URL || "").replace(/\/+$/, "");
+          if (!sourceBase) {
+            throw new Error("LITE_DATA_SOURCE_URL is required.");
+          }
+
+          const outputDir = path.resolve(process.cwd(), "docs-site", "static", "lite-data");
+          await fs.rm(outputDir, { recursive: true, force: true });
+          await fs.mkdir(outputDir, { recursive: true });
+
+          async function fetchJson(url) {
+            const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+            if (!response.ok) throw new Error(`Failed ${url} (${response.status})`);
+            return response.json();
+          }
+
+          async function fetchText(url) {
+            const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+            if (!response.ok) throw new Error(`Failed ${url} (${response.status})`);
+            return response.text();
+          }
+
+          const indexUrl = `${sourceBase}/index.json`;
+          const indexPayload = await fetchJson(indexUrl);
+          const chunks = Array.isArray(indexPayload?.chunks) ? indexPayload.chunks : [];
+          if (chunks.length === 0) {
+            throw new Error("Published Lite dataset has zero chunks.");
+          }
+
+          await fs.writeFile(path.join(outputDir, "index.json"), `${JSON.stringify(indexPayload)}\n`, "utf8");
+          let fetched = 0;
+          for (const chunk of chunks) {
+            const file = String(chunk?.file || "").trim();
+            if (!file) continue;
+            const chunkUrl = `${sourceBase}/${encodeURIComponent(file)}`;
+            const text = await fetchText(chunkUrl);
+            await fs.writeFile(path.join(outputDir, file), text, "utf8");
+            fetched += 1;
+          }
+
+          if (fetched === 0) {
+            throw new Error("No chunk files were fetched from published Lite dataset.");
+          }
+
+          console.log(`Fetched ${fetched} Lite chunk files from ${sourceBase}`);
+          NODE
 
       - name: Build Docusaurus site
         run: npm run build
