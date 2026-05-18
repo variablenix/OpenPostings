@@ -51,6 +51,11 @@ Feature payloads:
 
 If backend service worker is installed, the installer writes a startup entry that launches the backend tray process on sign-in.
 
+## MacOS Direct Install (There will never be a playstore version as Apple's Garden wall requires 100 soul bucks every year just for a free app, this its outside of scope of an opensource application)
+You can download the lastest app from the github releases page and run it. 
+
+- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.8/openpostings-1.0.8-universal.dmg
+
 ## Source Option: Run from source (Best Stability & Compatibility)
 
 ### Requirements
