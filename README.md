@@ -12,6 +12,7 @@
 - [Android Install from Google PlayStore (In Beta Coming Soon...)](#android-install-from-google-playstore-in-beta-comming-soon)
 - [Android Phone/Device DIRECT Install](#android-phonedevice-direct-install-easiest-setup-but-still-wip-and-may-have-some-bugs)
 - [Windows Installer Setup (Windows 10/11)](#windows-installer-setup-windows-1011-easiest-setup-but-still-wip-and-may-have-some-bugs)
+- [MacOS Direct Install](#macos-direct-install-there-will-never-be-a-playstore-version-as-apples-garden-wall-requires-100-soul-bucks-every-year-just-for-a-free-app-this-its-outside-of-scope-of-an-opensource-application)
 - [Source Installation Setup](#source-installation-setup-best-stability--compatibility)
   - [Requirements](#requirements)
   - [Installation](#installation)
