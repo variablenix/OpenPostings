@@ -1,0 +1,58 @@
+{
+  "name": "openpostings-macos",
+  "version": "1.0.8",
+  "private": true,
+  "main": "app/main.cjs",
+  "scripts": {
+    "postinstall": "electron-builder install-app-deps",
+    "prepare:bundle": "node ./scripts/prepare-bundle.mjs",
+    "dev": "npm run prepare:bundle && electron .",
+    "build:mac": "npm run prepare:bundle && electron-builder --mac dmg --universal",
+    "build:mac:dir": "npm run prepare:bundle && electron-builder --mac dir --universal"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "sql.js": "^1.13.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "electron": "24.8.8",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.openpostings.desktop",
+    "productName": "OpenPostings",
+    "asar": false,
+    "files": [
+      "app/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "minimumSystemVersion": "10.15",
+      "icon": "app/bundle/assets/dockIcon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "artifactName": "openpostings-${version}-${arch}.${ext}",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "artifactName": "openpostings-${version}-${arch}.${ext}",
+      "sign": false
+    }
+  }
+}
