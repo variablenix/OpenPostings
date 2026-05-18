@@ -181,6 +181,11 @@ Choose the setup type during install:
 
 Once the installation is complete, you can launch OpenPostings from the start menu. 
 
+## MacOS Direct Install (There will never be a playstore version as Apple's Garden wall requires 100 soul bucks every year just for a free app, this its outside of scope of an opensource application)
+You can download the lastest app from the github releases page and run it. 
+
+- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.8/openpostings-1.0.8-universal.dmg
+
 ## Source Installation Setup (Best Stability & Compatibility)
 
 ### Requirements
