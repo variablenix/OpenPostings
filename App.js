@@ -61,6 +61,14 @@ const PAGE_TITLES = {
   [PAGE_KEYS.SETTINGS_MCP]: "Settings / MCP Settings"
 };
 const IS_ANDROID = Platform.OS === "android";
+const PLATFORM_DISPLAY_NAME = (() => {
+  if (Platform.OS !== "web") return Platform.OS;
+  const runtimePlatform = String(globalThis?.openpostings?.platform || "")
+    .trim()
+    .toLowerCase();
+  if (runtimePlatform === "macos") return "macOS";
+  return "web";
+})();
 const ANDROID_STATUS_BAR_TOP_OFFSET = IS_ANDROID ? Math.max(0, Number(StatusBar.currentHeight || 0)) : 0;
 const ANDROID_BACKEND_TASK_BASE_NAME = "OpenPostingsBackendService";
 const ANDROID_BACKEND_TASK_REGISTRATION_COUNT = 16;
@@ -3462,7 +3470,7 @@ export default function App() {
         </View>
         {!IS_ANDROID ? (
           <View style={styles.headerTextContainer}>
-            <Text style={styles.subtitle}>ATS postings ({Platform.OS})</Text>
+            <Text style={styles.subtitle}>ATS postings ({PLATFORM_DISPLAY_NAME})</Text>
             <Text style={styles.small}>API: {API_BASE_URL}</Text>
           </View>
         ) : null}
@@ -4308,4 +4316,3 @@ const styles = StyleSheet.create({
     color: "#ffffff"
   }
 });
-
