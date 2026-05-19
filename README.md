@@ -36,8 +36,11 @@ Over **THOUSANDS** fresh jobs on average **DAILY**!
 ## Youtube Video
 [![OpenPostings Discussion](https://img.youtube.com/vi/5sVIhhwx3Yk/0.jpg)](https://www.youtube.com/watch?v=5sVIhhwx3Yk)
 
-## Diagram
-![Web UI Screenshot](README-Images/OpenPostings_Diagram.png)
+## Diagram (Light)
+![Web UI Screenshot](README-Images/OpenPostings_Diagram_Light.png)
+
+## Diagram (Core)
+![Web UI Screenshot](README-Images/OpenPostings_Diagram_Core.png)
 
 ## Features
 
