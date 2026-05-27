@@ -3,6 +3,7 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def prepareAndroidBackendScript = new File(projectRoot, "scripts/android/prepare-node-backend.mjs")
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -63,6 +64,13 @@ react {
     autolinkLibrariesWithApp()
 }
 
+tasks.register("prepareAndroidNodeBackend", Exec) {
+    workingDir projectRoot
+    commandLine "node", prepareAndroidBackendScript.absolutePath
+}
+
+preBuild.dependsOn(tasks.named("prepareAndroidNodeBackend"))
+
 /**
  * Set this to true in release builds to optimize the app using [R8](https://developer.android.com/topic/performance/app-optimization/enable-app-optimization).
  */
@@ -92,8 +100,8 @@ android {
         applicationId 'com.jatonjustice.openpostings'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "1.0.8"
+        versionCode 11
+        versionName "2.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

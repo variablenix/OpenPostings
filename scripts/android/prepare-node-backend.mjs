@@ -127,6 +127,20 @@ function copyBackendFiles() {
   writeFileSync(path.join(backendRoot, "jobs.db"), readFileSync(sourceDbPath));
 }
 
+function patchAndroidBackendForSqlJs() {
+  const migrationServicePath = path.join(backendRoot, "server", "services", "migration.js");
+  if (!existsSync(migrationServicePath)) return;
+
+  const currentContent = readFileSync(migrationServicePath, "utf8");
+  const patchedContent = currentContent
+    .replace('const { open } = require("sqlite");\n', "")
+    .replace('const sqlite3 = require("sqlite3");\n', "");
+
+  if (patchedContent !== currentContent) {
+    writeUtf8File(migrationServicePath, patchedContent);
+  }
+}
+
 function writeBuildNativeModulesFlag() {
   // We explicitly avoid native Node addons in the Android runtime bundle.
   writeUtf8File(buildNativeModulesFlagPath, "0\n");
@@ -142,6 +156,7 @@ function installNodeProjectDependencies() {
 writeNodeProjectPackageJson();
 writeNodeProjectMainFile();
 copyBackendFiles();
+patchAndroidBackendForSqlJs();
 writeBuildNativeModulesFlag();
 installNodeProjectDependencies();
 

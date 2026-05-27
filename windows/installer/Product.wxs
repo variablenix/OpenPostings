@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package
@@ -57,6 +57,76 @@
     <ui:WixUI Id="WixUI_Mondo" />
     <WixVariable Id="WixUILicenseRtf" Value="OpenPostings_License.rtf" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <Property Id="EXISTING_APPDATA_DB">
+      <DirectorySearch Id="ExistingAppDataBackendDirectorySearch" Path="[LocalAppDataFolder]OpenPostings\backend">
+        <FileSearch Id="ExistingAppDataJobsDbSearch" Name="jobs.db" />
+      </DirectorySearch>
+    </Property>
+
+    <UI>
+      <Dialog
+        Id="DatabaseOverwriteWarningDlg"
+        Width="370"
+        Height="270"
+        Title="[ProductName] Setup">
+        <Control
+          Id="Title"
+          Type="Text"
+          X="15"
+          Y="6"
+          Width="340"
+          Height="20"
+          Transparent="yes"
+          NoPrefix="yes"
+          Text="{\WixUI_Font_Title}Database Overwrite Warning" />
+        <Control
+          Id="WarningText"
+          Type="Text"
+          X="20"
+          Y="35"
+          Width="330"
+          Height="115"
+          Text="WARNING: If you have a previous install PLEASE COPY/MOVE your database file from:[LocalAppDataFolder]OpenPostings\backend\jobs.db to another folder before continuing. You can use the migration tool in Sync Settings to merge back data like applications you already applied for. If you do not, you will NOT get the latest updated companies and ATSs from this latest update...." />
+        <Control
+          Id="Back"
+          Type="PushButton"
+          X="180"
+          Y="243"
+          Width="56"
+          Height="17"
+          Text="!(loc.WixUIBack)">
+          <Publish Event="NewDialog" Value="CustomizeDlg" Condition="WixUI_InstallMode = &quot;InstallCustom&quot;" />
+          <Publish Event="NewDialog" Value="SetupTypeDlg" Condition="WixUI_InstallMode &lt;&gt; &quot;InstallCustom&quot;" />
+        </Control>
+        <Control
+          Id="Next"
+          Type="PushButton"
+          X="236"
+          Y="243"
+          Width="56"
+          Height="17"
+          Default="yes"
+          Text="!(loc.WixUINext)">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" Condition="1" />
+        </Control>
+        <Control
+          Id="Cancel"
+          Type="PushButton"
+          X="304"
+          Y="243"
+          Width="56"
+          Height="17"
+          Cancel="yes"
+          Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" Condition="1" />
+        </Control>
+      </Dialog>
+
+      <Publish Dialog="SetupTypeDlg" Control="TypicalButton" Event="NewDialog" Value="DatabaseOverwriteWarningDlg" Order="999" Condition="EXISTING_APPDATA_DB AND NOT Installed" />
+      <Publish Dialog="SetupTypeDlg" Control="CompleteButton" Event="NewDialog" Value="DatabaseOverwriteWarningDlg" Order="999" Condition="EXISTING_APPDATA_DB AND NOT Installed" />
+      <Publish Dialog="CustomizeDlg" Control="Next" Event="NewDialog" Value="DatabaseOverwriteWarningDlg" Order="999" Condition="EXISTING_APPDATA_DB AND NOT Installed" />
+    </UI>
   </Package>
 
   <Fragment>

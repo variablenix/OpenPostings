@@ -152,11 +152,11 @@ $backendNodeDir = Join-Path $backendStagingDir "node"
 New-Item -ItemType Directory -Path $backendNodeDir -Force | Out-Null
 Copy-Item -LiteralPath $nodeExePath -Destination (Join-Path $backendNodeDir "node.exe") -Force
 
-$serverEntryPath = Join-Path $projectRoot "server\index.js"
-Assert-FileExists -Path $serverEntryPath -Description "Backend server entrypoint"
-$backendServerDir = Join-Path $backendStagingDir "server"
-New-Item -ItemType Directory -Path $backendServerDir -Force | Out-Null
-Copy-Item -LiteralPath $serverEntryPath -Destination (Join-Path $backendServerDir "index.js") -Force
+$serverSourceDir = Join-Path $projectRoot "server"
+if (-not (Test-Path -LiteralPath $serverSourceDir -PathType Container)) {
+    throw "Backend server source directory not found at '$serverSourceDir'."
+}
+Copy-Item -LiteralPath $serverSourceDir -Destination $backendStagingDir -Recurse -Force
 
 $databaseSourcePath = Join-Path $projectRoot $BackendDatabaseSource
 Assert-FileExists -Path $databaseSourcePath -Description "Backend database source"

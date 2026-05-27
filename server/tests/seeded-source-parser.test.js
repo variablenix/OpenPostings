@@ -4,7 +4,7 @@ const {
   listSeededAtsValues,
   DYNAMIC_ATS_OPTIONS,
   SEEDED_ATS_OPTIONS
-} = require("../index");
+} = require("..");
 
 function run() {
   const seededAtsValues = listSeededAtsValues();

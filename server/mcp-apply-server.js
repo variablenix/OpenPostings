@@ -264,7 +264,7 @@ const ATS_FILTER_OPTIONS = new Set([
   "webcruiter",
   "academicjobsonline",
   "hibob",
-  "isolvisolvedhire",
+  "isolved",
   "greenhouse",
   "hirebridge",
   "hrmdirect",
@@ -368,7 +368,7 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes(".trakstarhire.com/jobs/")) return "trakstar";
   if (url.includes("ycombinator.com/companies/") && url.includes("/jobs")) return "ycombinator";
   if (url.includes(".yello.co/jobs/")) return "yello";
-  if (url.includes(".isolvedhire.com/jobs/")) return "isolvisolvedhire";
+  if (url.includes(".isolvedhire.com/jobs/")) return "isolved";
   if (url.includes("/careers/jobdetail/")) return "avature";
   if (url.includes("www.comeet.com/jobs/") || url.includes("comeet.com/jobs/")) return "comeet";
   if (url.includes(".applytojob.com/apply")) return "applytojob";
@@ -559,8 +559,8 @@ function normalizeAtsFilters(value) {
       ) {
         return "yello";
       }
-      if (normalized === "isolvisolvedhire" || normalized === "isolvedhire" || normalized === "isolvedhire.com" || normalized === "isolvedhirecom") {
-        return "isolvisolvedhire";
+      if (normalized === "isolved" || normalized === "isolvedhire" || normalized === "isolvedhire.com" || normalized === "isolvedhirecom") {
+        return "isolved";
       }
       if (normalized === "applicantprocom" || normalized === "applicantpro.com") return "applicantpro";
       if (normalized === "applytojobcom" || normalized === "applytojob.com") return "applytojob";
