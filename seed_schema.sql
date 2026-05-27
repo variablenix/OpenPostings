@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS Postings (
       position_name TEXT NOT NULL,
       job_posting_url TEXT NOT NULL UNIQUE,
       posting_date TEXT,
+      job_description TEXT,
+      compensation_type TEXT,
+      education_levels TEXT,
+      pay_min REAL,
+      pay_max REAL,
+      pay_currency TEXT,
+      pay_period TEXT,
+      pay_raw TEXT,
       first_seen_epoch INTEGER,
       last_seen_epoch INTEGER,
       hidden INTEGER NOT NULL DEFAULT 0,
@@ -65,6 +73,8 @@ CREATE TABLE IF NOT EXISTS SyncServiceSettings (
   id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
   ats_request_queue_concurrency INTEGER NOT NULL DEFAULT 1,
   sync_enabled_ats TEXT NOT NULL DEFAULT '[]',
+  posting_freshness_hours INTEGER NOT NULL DEFAULT 24,
+  download_job_descriptions INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

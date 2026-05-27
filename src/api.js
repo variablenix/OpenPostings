@@ -73,11 +73,25 @@ export function fetchPostings(search = "", limit = 500, offset = 0, filters = {}
   const atsArray = Array.isArray(filters?.ats) ? filters.ats.filter(Boolean) : [];
   const atsSingle = !Array.isArray(filters?.ats) ? String(filters?.ats || "").trim().toLowerCase() : "";
   const industries = Array.isArray(filters?.industries) ? filters.industries.filter(Boolean) : [];
+  const compensationTypes = Array.isArray(filters?.compensation_types)
+    ? filters.compensation_types.filter(Boolean)
+    : [];
+  const payPeriods = Array.isArray(filters?.pay_periods) ? filters.pay_periods.filter(Boolean) : [];
+  const payMin = String(filters?.pay_min ?? "").trim();
+  const payMax = String(filters?.pay_max ?? "").trim();
+  const educationLevels = Array.isArray(filters?.education_levels) ? filters.education_levels.filter(Boolean) : [];
   const states = Array.isArray(filters?.states) ? filters.states.filter(Boolean) : [];
   const counties = Array.isArray(filters?.counties) ? filters.counties.filter(Boolean) : [];
   const countries = Array.isArray(filters?.countries) ? filters.countries.filter(Boolean) : [];
   const regions = Array.isArray(filters?.regions) ? filters.regions.filter(Boolean) : [];
-  const remote = String(filters?.remote || "all").trim().toLowerCase();
+  const remoteValues = Array.isArray(filters?.remote)
+    ? filters.remote
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean)
+    : String(filters?.remote || "all")
+        .split(",")
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean);
 
   if (atsArray.length > 0) {
     params.set("ats", atsArray.join(","));
@@ -86,6 +100,21 @@ export function fetchPostings(search = "", limit = 500, offset = 0, filters = {}
   }
   if (industries.length > 0) {
     params.set("industries", industries.join(","));
+  }
+  if (compensationTypes.length > 0) {
+    params.set("compensation_types", compensationTypes.join(","));
+  }
+  if (payPeriods.length > 0) {
+    params.set("pay_periods", payPeriods.join(","));
+  }
+  if (payMin) {
+    params.set("pay_min", payMin);
+  }
+  if (payMax) {
+    params.set("pay_max", payMax);
+  }
+  if (educationLevels.length > 0) {
+    params.set("education_levels", educationLevels.join(","));
   }
   if (states.length > 0) {
     params.set("states", states.join(","));
@@ -99,8 +128,9 @@ export function fetchPostings(search = "", limit = 500, offset = 0, filters = {}
   if (regions.length > 0) {
     params.set("regions", regions.join(","));
   }
-  if (remote && remote !== "all") {
-    params.set("remote", remote);
+  const normalizedRemoteValues = Array.from(new Set(remoteValues));
+  if (normalizedRemoteValues.length > 0 && !normalizedRemoteValues.includes("all")) {
+    params.set("remote", normalizedRemoteValues.join(","));
   }
   if (filters?.hide_no_date) {
     params.set("hide_no_date", "1");
@@ -156,9 +186,13 @@ export function fetchSyncStatus() {
   return request(`/sync/status?_ts=${Date.now()}`);
 }
 
-export function triggerWorkdaySync(wait = false) {
+export function triggerAtsSync(wait = false) {
   const suffix = wait ? "?wait=1" : "";
   return request(`/sync/ats${suffix}`, { method: "POST" });
+}
+
+export function triggerWorkdaySync(wait = false) {
+  return triggerAtsSync(wait);
 }
 
 export function fetchPersonalInformation() {
@@ -237,6 +271,21 @@ export function fetchMcpCandidates(filters = {}) {
   }
   if (Array.isArray(filters?.industries) && filters.industries.length > 0) {
     params.set("industries", filters.industries.filter(Boolean).join(","));
+  }
+  if (Array.isArray(filters?.compensation_types) && filters.compensation_types.length > 0) {
+    params.set("compensation_types", filters.compensation_types.filter(Boolean).join(","));
+  }
+  if (Array.isArray(filters?.pay_periods) && filters.pay_periods.length > 0) {
+    params.set("pay_periods", filters.pay_periods.filter(Boolean).join(","));
+  }
+  if (String(filters?.pay_min ?? "").trim()) {
+    params.set("pay_min", String(filters.pay_min).trim());
+  }
+  if (String(filters?.pay_max ?? "").trim()) {
+    params.set("pay_max", String(filters.pay_max).trim());
+  }
+  if (Array.isArray(filters?.education_levels) && filters.education_levels.length > 0) {
+    params.set("education_levels", filters.education_levels.filter(Boolean).join(","));
   }
   if (Array.isArray(filters?.states) && filters.states.length > 0) {
     params.set("states", filters.states.filter(Boolean).join(","));

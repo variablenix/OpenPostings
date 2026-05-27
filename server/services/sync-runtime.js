@@ -1,0 +1,1260 @@
+const { normalizeSyncEnabledAts, normalizeAtsFilterValue, inferPostingLocationFromJobUrl, ATS_FILTER_OPTIONS, ATS_FILTER_OPTION_ITEMS } = require("../helpers/normalize-ats");
+const { getSyncPromise, setSyncPromise, getDb, setDb, getPostingLocationByJobUrl, setPostingLocationByJobUrl, getSyncEnabledAts, getSyncDownloadJobDescriptions, getAtsRequestQueueConcurrency } = require("./runtime-context.js");
+const { nowEpochSeconds, getPostingFreshnessWindowSeconds, shouldStorePostingByDate } = require("../helpers/normalize-numbers")
+const { normalizeCompensationType, serializeEducationLevels, normalizeCompensationCurrencyCode, normalizeCompensationPayPeriod } = require("../helpers/description-filters")
+
+const { collectPostingsForWorkdayCompany } = require("../ats/workday/service.js");
+const { collectPostingsForAshbyCompany } = require("../ats/ashby/service.js");
+const { collectPostingsForGreenhouseCompany } = require("../ats/greenhouse/service.js");
+const { collectPostingsForLeverCompany } = require("../ats/lever/service.js");
+const { collectPostingsForJobviteCompany } = require("../ats/jobvite/service.js");
+const { collectPostingsForApplicantProCompany } = require("../ats/applicantpro/service.js");
+const { collectPostingsForApplyToJobCompany } = require("../ats/applytojob/service.js");
+const { collectPostingsForTheApplicantManagerCompany } = require("../ats/theapplicantmanager/service.js");
+const { collectPostingsForBreezyCompany } = require("../ats/breezy/service.js");
+const { collectPostingsForIcimsCompany } = require("../ats/icims/service.js");
+const { collectPostingsForZohoCompany } = require("../ats/zoho/service.js");
+const { collectPostingsForApplicantAiCompany } = require("../ats/applicantai/service.js");
+const { collectPostingsForGemCompany } = require("../ats/gem/service.js");
+const { collectPostingsForJobApsCompany } = require("../ats/jobaps/service.js");
+const { collectPostingsForJoinCompany } = require("../ats/join/service.js");
+const { collectPostingsForTalentreefCompany } = require("../ats/talentreef/service.js");
+const { collectPostingsForCareerplugCompany } = require("../ats/careerplug/service.js");
+const { collectPostingsForBambooHrCompany } = require("../ats/bamboohr/service.js");
+const { collectPostingsForAdpMyjobsCompany } = require("../ats/adp_myjobs/service.js");
+const { collectPostingsForPaycorCompany } = require("../ats/paycor/service.js");
+const { collectPostingsForPaycomonlineCompany } = require("../ats/paycomonline/service.js");
+const { collectPostingsForPrismhrCompany } = require("../ats/prismhr/service.js");
+const { collectPostingsForSilkroadCompany } = require("../ats/silkroad/service.js");
+const { collectPostingsForAdpWorkforcenowCompany } = require("../ats/adp_workforcenow/service.js");
+const { collectPostingsForPaylocityCompany } = require("../ats/paylocity/service.js");
+const { collectPostingsForDayforceCompany } = require("../ats/dayforce/service.js");
+const { collectPostingsForEightfoldCompany } = require("../ats/eightfold/service.js");
+const { collectPostingsForOracleCompany } = require("../ats/oracle/service.js");
+const { collectPostingsForBrassringCompany } = require("../ats/brassring/service.js");
+const { collectPostingsForApplitrackCompany } = require("../ats/applitrack/service.js");
+const { collectPostingsForHibobCompany } = require("../ats/hibob/service.js");
+const { collectPostingsForisolvedCompany } = require("../ats/isolved/service.js");
+const { collectPostingsForAvatureCompany } = require("../ats/avature/service.js");
+const { collectPostingsForComeetCompany } = require("../ats/comeet/service.js");
+const { collectPostingsForFactorialhrCompany } = require("../ats/factorialhr/service.js");
+const { collectPostingsForHireologyCompany } = require("../ats/hireology/service.js");
+const { collectPostingsForHiringplatformCompany } = require("../ats/hiringplatform/service.js");
+const { collectPostingsForHomerunCompany } = require("../ats/homerun/service.js");
+const { collectPostingsForJibeapplyCompany } = require("../ats/jibeapply/service.js");
+const { collectPostingsForJobs2webCompany } = require("../ats/jobs2web/service.js");
+const { collectPostingsForOccupopCompany } = require("../ats/occupop/service.js");
+const { collectPostingsForPeopleadminCompany } = require("../ats/peopleadmin/service.js");
+const { collectPostingsForPersonioCompany } = require("../ats/personio/service.js");
+const { collectPostingsForRecruiterflowCompany } = require("../ats/recruiterflow/service.js");
+const { collectPostingsForSoftgardenCompany } = require("../ats/softgarden/service.js");
+const { collectPostingsForTrakstarCompany } = require("../ats/trakstar/service.js");
+const { collectPostingsForYcombinatorCompany } = require("../ats/ycombinator/service.js");
+const { collectPostingsForYelloCompany } = require("../ats/yello/service.js");
+const { collectPostingsForCrelateCompany } = require("../ats/crelate/service.js");
+const { collectPostingsForManatalCompany } = require("../ats/manatal/service.js");
+const { collectPostingsForCareerspageCompany } = require("../ats/careerspage/service.js");
+const { collectPostingsForPageupCompany } = require("../ats/pageup/service.js");
+const { collectPostingsForHirebridgeCompany } = require("../ats/hirebridge/service.js");
+const { collectPostingsForTeamtailorCompany } = require("../ats/teamtailor/service.js");
+const { collectPostingsForFreshteamCompany } = require("../ats/freshteam/service.js");
+const { collectPostingsForAgilehrCompany } = require("../ats/agilehr/service.js");
+const { collectPostingsForSagehrCompany } = require("../ats/sagehr/service.js");
+const { collectPostingsForLoxoCompany } = require("../ats/loxo/service.js");
+const { collectPostingsForPeopleforceCompany } = require("../ats/peopleforce/service.js");
+const { collectPostingsForSimplicantCompany } = require("../ats/simplicant/service.js");
+const { collectPostingsForPinpointHqCompany } = require("../ats/pinpointhq/service.js");
+const { collectPostingsForRecruitCrmCompany } = require("../ats/recruitcrm/service.js");
+const { collectPostingsForRipplingCompany } = require("../ats/rippling/service.js");
+const { collectPostingsForCareerpuckCompany } = require("../ats/careerpuck/service.js");
+const { collectPostingsForFountainCompany } = require("../ats/fountain/service.js");
+const { collectPostingsForGetroCompany } = require("../ats/getro/service.js");
+const { collectPostingsForHrmDirectCompany } = require("../ats/hrmdirect/service.js");
+const { collectPostingsForTalentlyftCompany } = require("../ats/talentlyft/service.js");
+const { collectPostingsForTalexioCompany } = require("../ats/talexio/service.js");
+const { collectPostingsForSapHrCloudCompany } = require("../ats/saphrcloud/service.js");
+const { collectPostingsForRecruiteeCompany } = require("../ats/recruitee/service.js");
+const { collectPostingsForUltiProCompany } = require("../ats/ultipro/service.js");
+const { collectPostingsForUkgCompany } = require("../ats/ukg/service.js");
+const { collectPostingsForTaleoCompany } = require("../ats/taleonet/service.js");
+
+
+const { collectPostingsForGovernmentJobsDynamic, GOVERNMENTJOBS_ESTIMATED_COMPANY_COUNT } = require("../ats/governmentjobs/service.js");
+const { collectPostingsForSmartRecruitersDynamic, SMARTRECRUITERS_ESTIMATED_COMPANY_COUNT, SMARTRECRUITERS_INSERT_EVERY_N_TARGETS } = require("../ats/smartrecruiters/service.js");
+const { collectPostingsForPoliceappDynamic, POLICEAPP_ESTIMATED_COMPANY_COUNT } = require("../ats/policeapp/service.js");
+const { collectPostingsForUsajobsDynamic, USAJOBS_ESTIMATED_COMPANY_COUNT } = require("../ats/usajobs/service.js");
+const { collectPostingsForK12jobspotDynamic, K12JOBSPOT_ESTIMATED_COMPANY_COUNT } = require("../ats/k12jobspot/service.js");
+const { collectPostingsForSchoolspringDynamic, SCHOOLSPRING_ESTIMATED_COMPANY_COUNT } = require("../ats/schoolspring/service.js");
+const { collectPostingsForEdjoinDynamic, EDJOIN_ESTIMATED_COMPANY_COUNT } = require("../ats/edjoin/service.js");
+const { collectPostingsForWebcruiterDynamic, WEBCRUITER_ESTIMATED_COMPANY_COUNT } = require("../ats/webcruiter/service.js");
+const { collectPostingsForAcademicJobsOnlineDynamic, ACADEMICJOBSONLINE_ESTIMATED_COMPANY_COUNT } = require("../ats/academicjobsonline/service.js");
+const { collectPostingsForCalcareersDynamic, CALCAREERS_ESTIMATED_COMPANY_COUNT } = require("../ats/calcareers/service.js");
+const { collectPostingsForCaloppsDynamic, CALOPPS_ESTIMATED_COMPANY_COUNT } = require("../ats/calopps/service.js");
+const { collectPostingsForStatejobsnyDynamic, STATEJOBSNY_ESTIMATED_COMPANY_COUNT } = require("../ats/statejobsny/service.js");
+
+const syncStatus = {
+  running: false,
+  started_at: null,
+  last_sync_at: null,
+  last_sync_summary: null,
+  last_error: null,
+  progress: null
+};
+
+const SYNC_WORKER_CONCURRENCY_RAW = Number(process.env.SYNC_WORKER_CONCURRENCY || 4);
+const SYNC_WORKER_CONCURRENCY =
+  Number.isFinite(SYNC_WORKER_CONCURRENCY_RAW) && SYNC_WORKER_CONCURRENCY_RAW > 0
+    ? Math.floor(SYNC_WORKER_CONCURRENCY_RAW)
+    : 4;
+
+const SYNC_POSTING_FLUSH_BATCH_SIZE = Number(process.env.SYNC_POSTING_FLUSH_BATCH_SIZE || 100); 
+
+
+async function collectPostingsForCompany(company, options = {}) {
+  const atsName = String(company?.ATS_name || "").trim().toLowerCase();
+  if (atsName === "workday") {
+    return collectPostingsForWorkdayCompany(company, options);
+  }
+  if (atsName === "ashbyhq") {
+    return collectPostingsForAshbyCompany(company);
+  }
+  if (atsName === "greenhouseio" || atsName === "greenhouse.io" || atsName === "greenhouse") {
+    return collectPostingsForGreenhouseCompany(company);
+  }
+  if (atsName === "leverco" || atsName === "lever.co" || atsName === "lever") {
+    return collectPostingsForLeverCompany(company);
+  }
+  if (atsName === "jobvite" || atsName === "jobvite.com" || atsName === "jobvitecom") {
+    return collectPostingsForJobviteCompany(company);
+  }
+  if (atsName === "applicantpro" || atsName === "applicantpro.com" || atsName === "applicantprocom") {
+    return collectPostingsForApplicantProCompany(company);
+  }
+  if (atsName === "applytojob" || atsName === "applytojob.com" || atsName === "applytojobcom") {
+    return collectPostingsForApplyToJobCompany(company);
+  }
+  if (
+    atsName === "theapplicantmanager" ||
+    atsName === "theapplicantmanager.com" ||
+    atsName === "theapplicantmanagercom"
+  ) {
+    return collectPostingsForTheApplicantManagerCompany(company);
+  }
+  if (atsName === "breezy" || atsName === "breezyhr" || atsName === "breezy.hr" || atsName === "breezyhrcom") {
+    return collectPostingsForBreezyCompany(company);
+  }
+  if (atsName === "icims" || atsName === "icims.com" || atsName === "icimscom") {
+    return collectPostingsForIcimsCompany(company);
+  }
+  if (atsName === "zoho" || atsName === "zohorecruit" || atsName === "zohorecruit.com" || atsName === "zohorecruitcom") {
+    return collectPostingsForZohoCompany(company);
+  }
+  if (atsName === "applicantai" || atsName === "applicantai.com" || atsName === "applicantaicom") {
+    return collectPostingsForApplicantAiCompany(company);
+  }
+  if (atsName === "gem" || atsName === "jobs.gem.com" || atsName === "gem.com" || atsName === "gemcom") {
+    return collectPostingsForGemCompany(company);
+  }
+  if (atsName === "jobaps" || atsName === "jobapscloud.com" || atsName === "jobapscloudcom") {
+    return collectPostingsForJobApsCompany(company);
+  }
+  if (atsName === "join" || atsName === "join.com" || atsName === "joincom") {
+    return collectPostingsForJoinCompany(company);
+  }
+  if (
+    atsName === "talentreef" ||
+    atsName === "jobappnetwork.com" ||
+    atsName === "jobappnetworkcom" ||
+    atsName === "apply.jobappnetwork.com" ||
+    atsName === "applyjobappnetworkcom"
+  ) {
+    return collectPostingsForTalentreefCompany(company);
+  }
+  if (atsName === "careerplug" || atsName === "careerplug.com" || atsName === "careerplugcom") {
+    return collectPostingsForCareerplugCompany(company);
+  }
+  if (atsName === "bamboohr" || atsName === "bamboohr.com" || atsName === "bamboohrcom") {
+    return collectPostingsForBambooHrCompany(company);
+  }
+  if (atsName === "adp_myjobs" || atsName === "adpmyjobs") {
+    return collectPostingsForAdpMyjobsCompany(company);
+  }
+  if (
+    atsName === "paycor" ||
+    atsName === "recruitingbypaycor.com" ||
+    atsName === "recruitingbypaycorcom" ||
+    atsName === "www.recruitingbypaycor.com" ||
+    atsName === "wwwrecruitingbypaycorcom"
+  ) {
+    return collectPostingsForPaycorCompany(company);
+  }
+  if (
+    atsName === "paycomonline" ||
+    atsName === "paycomonline.net" ||
+    atsName === "paycomonlinenet" ||
+    atsName === "www.paycomonline.net" ||
+    atsName === "wwwpaycomonlinenet"
+  ) {
+    return collectPostingsForPaycomonlineCompany(company);
+  }
+  if (
+    atsName === "prismhr" ||
+    atsName === "prismhr-hire.com" ||
+    atsName === "prismhrhirecom" ||
+    atsName === "www.prismhr-hire.com" ||
+    atsName === "wwwprismhrhirecom"
+  ) {
+    return collectPostingsForPrismhrCompany(company);
+  }
+  if (
+    atsName === "silkroad" ||
+    atsName === "jobs.silkroad.com" ||
+    atsName === "jobssilkroadcom" ||
+    atsName === "www.jobs.silkroad.com" ||
+    atsName === "wwwjobssilkroadcom"
+  ) {
+    return collectPostingsForSilkroadCompany(company);
+  }
+  if (
+    atsName === "adp_workforcenow" ||
+    atsName === "adpworkforcenow" ||
+    atsName === "workforcenow.adp.com" ||
+    atsName === "workforcenowadpcom"
+  ) {
+    return collectPostingsForAdpWorkforcenowCompany(company);
+  }
+  if (
+    atsName === "paylocity" ||
+    atsName === "paylocity.com" ||
+    atsName === "paylocitycom" ||
+    atsName === "recruiting.paylocity.com" ||
+    atsName === "recruitingpaylocitycom"
+  ) {
+    return collectPostingsForPaylocityCompany(company);
+  }
+  if (
+    atsName === "dayforcehcm" ||
+    atsName === "dayforce" ||
+    atsName === "dayforcehcm.com" ||
+    atsName === "dayforcehcmcom"
+  ) {
+    // return collectPostingsForDayforceCompany(company);
+      // Dayforce temporarily disabled (403 token issue)
+    return [];
+  }
+  if (atsName === "eightfold" || atsName === "eightfold.ai" || atsName === "eightfoldai") {
+    return collectPostingsForEightfoldCompany(company);
+  }
+  if (
+    atsName === "oracle" ||
+    atsName === "oraclecloud" ||
+    atsName === "oraclecloud.com" ||
+    atsName === "oraclecloudcom"
+  ) {
+    return collectPostingsForOracleCompany(company);
+  }
+  if (
+    atsName === "brassring" ||
+    atsName === "brassring.com" ||
+    atsName === "brassringcom" ||
+    atsName === "sjobs.brassring.com" ||
+    atsName === "sjobsbrassringcom"
+  ) {
+    return collectPostingsForBrassringCompany(company);
+  }
+  if (atsName === "applitrack" || atsName === "applitrack.com" || atsName === "applitrackcom") {
+    return collectPostingsForApplitrackCompany(company);
+  }
+  if (atsName === "hibob" || atsName === "hibob.com" || atsName === "hibobcom" || atsName === "careers.hibob.com" || atsName === "careershibobcom") {
+    return collectPostingsForHibobCompany(company);
+  }
+  if (
+    atsName === "isolved" ||
+    atsName === "isolvedhire" ||
+    atsName === "isolvedhire.com" ||
+    atsName === "isolvedhirecom"
+  ) {
+    return collectPostingsForisolvedCompany(company);
+  }
+  if (
+    atsName === "avature" ||
+    atsName === "avature.net" ||
+    atsName === "avaturenet"
+  ) {
+    return collectPostingsForAvatureCompany(company);
+  }
+  if (
+    atsName === "comeet" ||
+    atsName === "comeet.com" ||
+    atsName === "comeetcom" ||
+    atsName === "www.comeet.com" ||
+    atsName === "wwwcomeetcom"
+  ) {
+    return collectPostingsForComeetCompany(company);
+  }
+  if (
+    atsName === "factorialhr" ||
+    atsName === "factorialhr.com" ||
+    atsName === "factorialhrcom"
+  ) {
+    return collectPostingsForFactorialhrCompany(company);
+  }
+  if (
+    atsName === "hireology" ||
+    atsName === "hireology.careers" ||
+    atsName === "hireologycareers"
+  ) {
+    return collectPostingsForHireologyCompany(company);
+  }
+  if (
+    atsName === "hiringplatform" ||
+    atsName === "hiringplatform.com" ||
+    atsName === "hiringplatformcom"
+  ) {
+    return collectPostingsForHiringplatformCompany(company);
+  }
+  if (atsName === "homerun" || atsName === "homerun.co" || atsName === "homerunco") {
+    return collectPostingsForHomerunCompany(company);
+  }
+  if (atsName === "jibeapply" || atsName === "jibeapply.com" || atsName === "jibeapplycom") {
+    return collectPostingsForJibeapplyCompany(company);
+  }
+  if (atsName === "jobs2web" || atsName === "jobs2web.com" || atsName === "jobs2webcom") {
+    return collectPostingsForJobs2webCompany(company);
+  }
+  if (
+    atsName === "occupop" ||
+    atsName === "occupop.com" ||
+    atsName === "occupopcom" ||
+    atsName === "occupop-careers.com" ||
+    atsName === "occupopcareerscom"
+  ) {
+    return collectPostingsForOccupopCompany(company);
+  }
+  if (
+    atsName === "peopleadmin" ||
+    atsName === "peopleadmin.com" ||
+    atsName === "peopleadmincom"
+  ) {
+    return collectPostingsForPeopleadminCompany(company);
+  }
+  if (
+    atsName === "personio" ||
+    atsName === "personio.com" ||
+    atsName === "personiocom" ||
+    atsName === "jobs.personio.com" ||
+    atsName === "jobspersoniocom"
+  ) {
+    return collectPostingsForPersonioCompany(company);
+  }
+  if (
+    atsName === "recruiterflow" ||
+    atsName === "recruiterflow.com" ||
+    atsName === "recruiterflowcom" ||
+    atsName === "www.recruiterflow.com" ||
+    atsName === "wwwrecruiterflowcom"
+  ) {
+    return collectPostingsForRecruiterflowCompany(company);
+  }
+  if (
+    atsName === "softgarden" ||
+    atsName === "softgarden.io" ||
+    atsName === "softgardenio"
+  ) {
+    return collectPostingsForSoftgardenCompany(company);
+  }
+  if (
+    atsName === "trakstar" ||
+    atsName === "hire.trakstar.com" ||
+    atsName === "hiretrakstarcom" ||
+    atsName === "recruiterbox.com" ||
+    atsName === "recruiterboxcom" ||
+    atsName === "trakstarhire.com" ||
+    atsName === "trakstarhirecom"
+  ) {
+    return collectPostingsForTrakstarCompany(company);
+  }
+  if (
+    atsName === "ycombinator" ||
+    atsName === "ycombinator.com" ||
+    atsName === "ycombinatorcom" ||
+    atsName === "www.ycombinator.com" ||
+    atsName === "wwwycombinatorcom"
+  ) {
+    return collectPostingsForYcombinatorCompany(company);
+  }
+  if (
+    atsName === "yello" ||
+    atsName === "yello.co" ||
+    atsName === "yelloco" ||
+    atsName === "www.yello.co" ||
+    atsName === "wwwyelloco"
+  ) {
+    return collectPostingsForYelloCompany(company);
+  }
+  if (
+    atsName === "crelate" ||
+    atsName === "crelate.com" ||
+    atsName === "crelatecom" ||
+    atsName === "jobs.crelate.com" ||
+    atsName === "jobscrelatecom"
+  ) {
+    return collectPostingsForCrelateCompany(company);
+  }
+  if (
+    atsName === "manatal" ||
+    atsName === "manatal.com" ||
+    atsName === "manatalcom" ||
+    atsName === "careers-page.com" ||
+    atsName === "careerspagecom"
+  ) {
+    return collectPostingsForManatalCompany(company);
+  }
+  if (atsName === "careerspage" || atsName === "careerspage.io" || atsName === "careerspageio") {
+    return collectPostingsForCareerspageCompany(company);
+  }
+  if (
+    atsName === "pageup" ||
+    atsName === "pageuppeople" ||
+    atsName === "pageuppeople.com" ||
+    atsName === "pageuppeoplecom" ||
+    atsName === "careers.pageuppeople.com" ||
+    atsName === "careerspageuppeoplecom"
+  ) {
+    return collectPostingsForPageupCompany(company);
+  }
+  if (
+    atsName === "hirebridge" ||
+    atsName === "hirebridge.com" ||
+    atsName === "hirebridgecom" ||
+    atsName === "recruit.hirebridge.com" ||
+    atsName === "recruithirebridgecom"
+  ) {
+    return collectPostingsForHirebridgeCompany(company);
+  }
+  if (atsName === "teamtailor" || atsName === "teamtailor.com" || atsName === "teamtailorcom") {
+    return collectPostingsForTeamtailorCompany(company);
+  }
+  if (atsName === "freshteam" || atsName === "freshteam.com" || atsName === "freshteamcom") {
+    return collectPostingsForFreshteamCompany(company);
+  }
+  if (atsName === "agilehr" || atsName === "agilehr.com" || atsName === "agilehrcom") {
+    return collectPostingsForAgilehrCompany(company);
+  }
+  if (
+    atsName === "sagehr" ||
+    atsName === "sage.hr" ||
+    atsName === "talent.sage.hr" ||
+    atsName === "talentsagehr"
+  ) {
+    return collectPostingsForSagehrCompany(company);
+  }
+  if (atsName === "loxo" || atsName === "loxo.co" || atsName === "loxoco") {
+    return collectPostingsForLoxoCompany(company);
+  }
+  if (atsName === "peopleforce" || atsName === "peopleforce.io" || atsName === "peopleforceio") {
+    return collectPostingsForPeopleforceCompany(company);
+  }
+  if (atsName === "simplicant" || atsName === "simplicant.com" || atsName === "simplicantcom") {
+    return collectPostingsForSimplicantCompany(company);
+  }
+  if (atsName === "pinpointhq" || atsName === "pinpointhq.com" || atsName === "pinpointhqcom") {
+    return collectPostingsForPinpointHqCompany(company);
+  }
+  if (atsName === "recruitcrm" || atsName === "recruitcrm.io" || atsName === "recruitcrmiocom" || atsName === "recruitcrmio") {
+    return collectPostingsForRecruitCrmCompany(company);
+  }
+  if (atsName === "rippling" || atsName === "rippling.com" || atsName === "ripplingcom" || atsName === "ats.rippling.com" || atsName === "atsripplingcom") {
+    return collectPostingsForRipplingCompany(company);
+  }
+  if (atsName === "careerpuck" || atsName === "careerpuck.com" || atsName === "careerpuckcom") {
+    return collectPostingsForCareerpuckCompany(company);
+  }
+  if (atsName === "fountain" || atsName === "fountain.com" || atsName === "fountaincom") {
+    return collectPostingsForFountainCompany(company);
+  }
+  if (atsName === "getro" || atsName === "getro.com" || atsName === "getrocom") {
+    return collectPostingsForGetroCompany(company);
+  }
+  if (atsName === "governmentjobs" || atsName === "governmentjobs.com" || atsName === "governmentjobscom") {
+    return collectPostingsForGovernmentJobsDynamic();
+  }
+  if (
+    atsName === "smartrecruiters" ||
+    atsName === "smartrecruiters.com" ||
+    atsName === "smartrecruiterscom" ||
+    atsName === "jobs.smartrecruiters.com" ||
+    atsName === "jobssmartrecruiterscom"
+  ) {
+    return collectPostingsForSmartRecruitersDynamic();
+  }
+  if (atsName === "policeapp" || atsName === "policeapp.com" || atsName === "policeappcom" || atsName === "www.policeapp.com" || atsName === "wwwpoliceappcom") {
+    return collectPostingsForPoliceappDynamic();
+  }
+  if (atsName === "usajobs" || atsName === "usajobs.gov" || atsName === "usajobsgov" || atsName === "www.usajobs.gov" || atsName === "wwwusajobsgov") {
+    return collectPostingsForUsajobsDynamic();
+  }
+  if (atsName === "k12jobspot" || atsName === "k12jobspot.com" || atsName === "k12jobspotcom" || atsName === "www.k12jobspot.com" || atsName === "wwwk12jobspotcom" || atsName === "api.k12jobspot.com" || atsName === "apik12jobspotcom") {
+    return collectPostingsForK12jobspotDynamic();
+  }
+  if (atsName === "schoolspring" || atsName === "schoolspring.com" || atsName === "schoolspringcom" || atsName === "api.schoolspring.com" || atsName === "apischoolspringcom" || atsName === "www.schoolspring.com" || atsName === "wwwschoolspringcom") {
+    return collectPostingsForSchoolspringDynamic();
+  }
+  if (
+    atsName === "edjoin" ||
+    atsName === "edjoin.org" ||
+    atsName === "edjoinorg" ||
+    atsName === "www.edjoin.org" ||
+    atsName === "wwwedjoinorg"
+  ) {
+    return collectPostingsForEdjoinDynamic();
+  }
+  if (
+    atsName === "webcruiter" ||
+    atsName === "webcruiter.com" ||
+    atsName === "webcruitercom" ||
+    atsName === "candidate.webcruiter.com" ||
+    atsName === "candidatewebcruitercom"
+  ) {
+    return collectPostingsForWebcruiterDynamic();
+  }
+  if (
+    atsName === "academicjobsonline" ||
+    atsName === "academicjobsonline.org" ||
+    atsName === "academicjobsonlineorg" ||
+    atsName === "www.academicjobsonline.org" ||
+    atsName === "wwwacademicjobsonlineorg"
+  ) {
+    return collectPostingsForAcademicJobsOnlineDynamic();
+  }
+  if (
+    atsName === "calcareers" ||
+    atsName === "calcareers.ca.gov" ||
+    atsName === "calcareerscagov" ||
+    atsName === "www.calcareers.ca.gov" ||
+    atsName === "wwwcalcareerscagov"
+  ) {
+    return collectPostingsForCalcareersDynamic();
+  }
+  if (
+    atsName === "calopps" ||
+    atsName === "calopps.org" ||
+    atsName === "caloppsorg" ||
+    atsName === "www.calopps.org" ||
+    atsName === "wwwcaloppsorg"
+  ) {
+    return collectPostingsForCaloppsDynamic();
+  }
+  if (
+    atsName === "statejobsny" ||
+    atsName === "statejobsny.com" ||
+    atsName === "statejobsnycom" ||
+    atsName === "www.statejobsny.com" ||
+    atsName === "wwwstatejobsnycom"
+  ) {
+    return collectPostingsForStatejobsnyDynamic();
+  }
+  if (atsName === "hrmdirect" || atsName === "hrmdirect.com" || atsName === "hrmdirectcom") {
+    return collectPostingsForHrmDirectCompany(company);
+  }
+  if (atsName === "talentlyft" || atsName === "talentlyft.com" || atsName === "talentlyftcom") {
+    return collectPostingsForTalentlyftCompany(company);
+  }
+  if (atsName === "talexio" || atsName === "talexio.com" || atsName === "talexiocom") {
+    return collectPostingsForTalexioCompany(company);
+  }
+  if (
+    atsName === "saphrcloud" ||
+    atsName === "saphrcloud.com" ||
+    atsName === "saphrcloudcom" ||
+    atsName === "jobs.hr.cloud.sap" ||
+    atsName === "jobshrcloudsap"
+  ) {
+    return collectPostingsForSapHrCloudCompany(company);
+  }
+  if (atsName === "recruiteecom" || atsName === "recruitee.com" || atsName === "recruitee") {
+    return collectPostingsForRecruiteeCompany(company);
+  }
+  if (atsName === "ultipro") {
+    return collectPostingsForUltiProCompany(company);
+  }
+  if (
+    atsName === "ukg" ||
+    atsName === "ukg.net" ||
+    atsName === "ukgnet" ||
+    atsName === "rec.pro.ukg.net" ||
+    atsName === "recproukgnet"
+  ) {
+    return collectPostingsForUkgCompany(company);
+  }
+  if (atsName === "taleo" || atsName === "taleo.net" || atsName === "taleonet") {
+    return collectPostingsForTaleoCompany(company);
+  }
+  return [];
+}
+
+
+async function getCompaniesForSync() {
+  const db = getDb();
+  const rows = await db.all(
+    `
+      SELECT id, company_name, url_string, ATS_name
+      FROM companies
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM blocked_companies b
+        WHERE b.normalized_company_name = LOWER(TRIM(companies.company_name))
+      );
+    `
+  );
+
+  const enabledAts = new Set(normalizeSyncEnabledAts(Array.from(getSyncEnabledAts())));
+  return rows
+    .filter((row) => enabledAts.has(normalizeAtsFilterValue(row?.ATS_name)))
+    .sort((a, b) => {
+      const aAts = String(a?.ATS_name || "");
+      const bAts = String(b?.ATS_name || "");
+      const atsCompare = aAts.localeCompare(bAts);
+      if (atsCompare !== 0) return atsCompare;
+      return String(a?.company_name || "").localeCompare(String(b?.company_name || ""));
+    });
+}
+
+
+function shuffleArrayInPlace(values) {
+  const items = Array.isArray(values) ? values : [];
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
+
+async function runAtsSyncInternal() {
+  const syncReferenceEpoch = nowEpochSeconds();
+  syncStatus.running = true;
+  syncStatus.started_at = new Date().toISOString();
+  syncStatus.progress = { current: 0, total: 0, company_name: "", total_collected: 0 };
+  syncStatus.last_error = null;
+
+  try {
+    const companies = await getCompaniesForSync();
+    const enabledAts = new Set(normalizeSyncEnabledAts(Array.from(getSyncEnabledAts())));
+    const shuffledCompanies = shuffleArrayInPlace([...companies]);
+    const syncTargets = [];
+    let smartRecruitersInserted = false;
+    let companyInsertionsSinceSmartRecruiters = 0;
+    for (const company of shuffledCompanies) {
+      syncTargets.push(company);
+      companyInsertionsSinceSmartRecruiters += 1;
+
+      if (
+        enabledAts.has("smartrecruiters") &&
+        companyInsertionsSinceSmartRecruiters >= SMARTRECRUITERS_INSERT_EVERY_N_TARGETS
+      ) {
+        syncTargets.push({
+          id: null,
+          company_name: "SmartRecruiters (dynamic)",
+          url_string: "https://jobs.smartrecruiters.com/sr-jobs/search",
+          ATS_name: "smartrecruiters"
+        });
+        smartRecruitersInserted = true;
+        companyInsertionsSinceSmartRecruiters = 0;
+      }
+    }
+
+    if (enabledAts.has("smartrecruiters") && companyInsertionsSinceSmartRecruiters > 0) {
+      syncTargets.push({
+        id: null,
+        company_name: "SmartRecruiters (dynamic)",
+        url_string: "https://jobs.smartrecruiters.com/sr-jobs/search",
+        ATS_name: "smartrecruiters"
+      });
+      smartRecruitersInserted = true;
+    }
+
+    if (enabledAts.has("smartrecruiters") && !smartRecruitersInserted) {
+      syncTargets.push({
+        id: null,
+        company_name: "SmartRecruiters (dynamic)",
+        url_string: "https://jobs.smartrecruiters.com/sr-jobs/search",
+        ATS_name: "smartrecruiters"
+      });
+    }
+
+    if (enabledAts.has("governmentjobs")) {
+      syncTargets.push({
+        id: null,
+        company_name: "GovernmentJobs (dynamic)",
+        url_string: "https://www.governmentjobs.com/jobs",
+        ATS_name: "governmentjobs"
+      });
+    }
+    if (enabledAts.has("policeapp")) {
+      syncTargets.push({
+        id: null,
+        company_name: "PoliceApp (dynamic)",
+        url_string:
+          "https://www.policeapp.com/jobs/urlrewrite_jobpostings/jobResultsAjax.ashx?j=0&r=50&s=0&p=0",
+        ATS_name: "policeapp"
+      });
+    }
+    if (enabledAts.has("usajobs")) {
+      syncTargets.push({
+        id: null,
+        company_name: "USAJobs (dynamic)",
+        url_string: "https://www.usajobs.gov/Search/ExecuteSearch",
+        ATS_name: "usajobs"
+      });
+    }
+    if (enabledAts.has("k12jobspot")) {
+      syncTargets.push({
+        id: null,
+        company_name: "K12JobSpot (dynamic)",
+        url_string: "https://api.k12jobspot.com/api/Jobs/Search",
+        ATS_name: "k12jobspot"
+      });
+    }
+    if (enabledAts.has("schoolspring")) {
+      syncTargets.push({
+        id: null,
+        company_name: "SchoolSpring (dynamic)",
+        url_string:
+          "https://api.schoolspring.com/api/Jobs/GetPagedJobsWithSearch?domainName=&keyword=&location=&category=&gradelevel=&jobtype=&organization=&swLat=&swLon=&neLat=&neLon=&page=1&size=25&sortDateAscending=false",
+        ATS_name: "schoolspring"
+      });
+    }
+    if (enabledAts.has("calcareers")) {
+      syncTargets.push({
+        id: null,
+        company_name: "CalCareers (dynamic)",
+        url_string: "https://calcareers.ca.gov/CalHRPublic/Search/JobSearchResults.aspx",
+        ATS_name: "calcareers"
+      });
+    }
+    if (enabledAts.has("calopps")) {
+      syncTargets.push({
+        id: null,
+        company_name: "CalOpps (dynamic)",
+        url_string: "https://www.calopps.org/job-search-list",
+        ATS_name: "calopps"
+      });
+    }
+    if (enabledAts.has("statejobsny")) {
+      syncTargets.push({
+        id: null,
+        company_name: "StateJobsNY (dynamic)",
+        url_string: "https://www.statejobsny.com/public/vacancyTable.cfm",
+        ATS_name: "statejobsny"
+      });
+    }
+    if (enabledAts.has("edjoin")) {
+      syncTargets.push({
+        id: null,
+        company_name: "EdJoin (dynamic)",
+        url_string:
+          "https://www.edjoin.org/Home/LoadJobs?rows=25&page=1&sort=postingDate&sortVal=2&order=desc&keywords=&location=&searchType=all&regions=&jobTypes=&days=0&empType=&catID=0&onlineApps=false&recruitmentCenterID=0&stateID=0&regionID=0&districtID=0&searchID=0",
+        ATS_name: "edjoin"
+      });
+    }
+    if (enabledAts.has("webcruiter")) {
+      syncTargets.push({
+        id: null,
+        company_name: "Webcruiter (dynamic)",
+        url_string: "https://candidate.webcruiter.com/en-gb/home/alladverts/webcruiter-id#search",
+        ATS_name: "webcruiter"
+      });
+    }
+    if (enabledAts.has("academicjobsonline")) {
+      syncTargets.push({
+        id: null,
+        company_name: "AcademicJobsOnline (dynamic)",
+        url_string: "https://academicjobsonline.org/ajo?joblst-44-0-0-0---0-p--",
+        ATS_name: "academicjobsonline"
+      });
+    }
+
+    syncStatus.progress.total = syncTargets.length;
+    const errors = [];
+    let totalPruned = 0;
+    let postingDatePruned = 0;
+    try {
+      totalPruned = await pruneExpiredPostings(syncReferenceEpoch);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `pruneExpiredPostings failed: ${String(error?.message || error)}`
+      });
+    }
+    try {
+      postingDatePruned = await prunePostingsOutsideDateWindow(syncReferenceEpoch);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `prunePostingsOutsideDateWindow failed: ${String(error?.message || error)}`
+      });
+    }
+    const postingLocationByJobUrl = getPostingLocationByJobUrl();
+    const nextPostingLocationByJobUrl = new Map(postingLocationByJobUrl);
+
+    const dedupedPostings = new Map();
+    const pendingPostingsForUpsert = [];
+    let excludedByPostingDate = 0;
+    let nextCompanyIndex = 0;
+    let completedCompanies = 0;
+    const workerCount = Math.min(SYNC_WORKER_CONCURRENCY, Math.max(1, syncTargets.length));
+    let flushPromise = Promise.resolve();
+
+    const flushPendingPostings = async (force = false) => {
+      if (!Array.isArray(pendingPostingsForUpsert) || pendingPostingsForUpsert.length === 0) return;
+      if (!force && pendingPostingsForUpsert.length < SYNC_POSTING_FLUSH_BATCH_SIZE) return;
+
+      const batch = pendingPostingsForUpsert.splice(0, pendingPostingsForUpsert.length);
+      if (batch.length === 0) return;
+      await upsertPostings(batch, syncReferenceEpoch);
+    };
+
+    const queueFlushPendingPostings = (force = false) => {
+      flushPromise = flushPromise.then(() => flushPendingPostings(force));
+      return flushPromise;
+    };
+
+    const runSyncWorker = async () => {
+      while (true) {
+        const currentIndex = nextCompanyIndex;
+        if (currentIndex >= syncTargets.length) return;
+        nextCompanyIndex += 1;
+
+        const company = syncTargets[currentIndex];
+        try {
+          const companyAts = normalizeAtsFilterValue(company?.ATS_name);
+          const currentlyEnabledAts = new Set(normalizeSyncEnabledAts(Array.from(getSyncEnabledAts())));
+          if (!currentlyEnabledAts.has(companyAts)) {
+            continue;
+          }
+
+          const postings = await collectPostingsForCompany(company, {
+            downloadJobDescriptions: getSyncDownloadJobDescriptions()
+          });
+          for (const posting of postings) {
+            if (!shouldStorePostingByDate(posting?.posting_date, syncReferenceEpoch)) {
+              excludedByPostingDate += 1;
+              continue;
+            }
+            if (dedupedPostings.has(posting.job_posting_url)) continue;
+            dedupedPostings.set(posting.job_posting_url, posting);
+            pendingPostingsForUpsert.push(posting);
+            const directLocation = String(posting?.location || "").trim();
+            const inferredLocation = String(inferPostingLocationFromJobUrl(posting?.job_posting_url) || "").trim();
+            const existingLocation = String(postingLocationByJobUrl.get(posting?.job_posting_url) || "").trim();
+            const location = directLocation || inferredLocation || existingLocation;
+            if (location) {
+              nextPostingLocationByJobUrl.set(posting.job_posting_url, location);
+              postingLocationByJobUrl.set(posting.job_posting_url, location);
+            }
+          }
+        } catch (error) {
+          errors.push({
+            company_name: company.company_name,
+            message: String(error?.message || error)
+          });
+        } finally {
+          if (pendingPostingsForUpsert.length >= SYNC_POSTING_FLUSH_BATCH_SIZE) {
+            try {
+              await queueFlushPendingPostings(false);
+            } catch (error) {
+              errors.push({
+                company_name: "__system__",
+                message: `queueFlushPendingPostings failed: ${String(error?.message || error)}`
+              });
+            }
+          }
+          completedCompanies += 1;
+          syncStatus.progress = {
+            current: completedCompanies,
+            total: syncTargets.length,
+            company_name: `${company.company_name} (${company.ATS_name})`,
+            total_collected: dedupedPostings.size
+          };
+        }
+      }
+    };
+
+    if (syncTargets.length > 0) {
+      await Promise.all(Array.from({ length: workerCount }, () => runSyncWorker()));
+    }
+
+    try {
+      await queueFlushPendingPostings(true);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `final queueFlushPendingPostings failed: ${String(error?.message || error)}`
+      });
+    }
+
+    try {
+      totalPruned += await pruneExpiredPostings(syncReferenceEpoch);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `post-sync pruneExpiredPostings failed: ${String(error?.message || error)}`
+      });
+    }
+    try {
+      postingDatePruned += await prunePostingsOutsideDateWindow(syncReferenceEpoch);
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `post-sync prunePostingsOutsideDateWindow failed: ${String(error?.message || error)}`
+      });
+    }
+    setPostingLocationByJobUrl(nextPostingLocationByJobUrl);
+    let syncScopeStats = {
+      sync_enabled_company_count: 0,
+      configured_enabled_ats_count: 0,
+      excluded_ats_count: 0
+    };
+    try {
+      syncScopeStats = await getSyncScopeStats();
+    } catch (error) {
+      errors.push({
+        company_name: "__system__",
+        message: `getSyncScopeStats failed: ${String(error?.message || error)}`
+      });
+    }
+
+    syncStatus.last_sync_at = new Date().toISOString();
+    syncStatus.last_sync_summary = {
+      total_companies: syncTargets.length,
+      ...syncScopeStats,
+      total_postings_stored: dedupedPostings.size,
+      worker_concurrency: workerCount,
+      ats_request_queue_concurrency: getAtsRequestQueueConcurrency(),
+      failed_companies: errors.length,
+      expired_pruned: totalPruned,
+      posting_date_pruned: postingDatePruned,
+      excluded_during_sync_by_posting_date: excludedByPostingDate,
+      errors: errors.slice(0, 30)
+    };
+  } catch (error) {
+    syncStatus.last_error = String(error?.message || error);
+  } finally {
+    syncStatus.running = false;
+    syncStatus.progress = null;
+  }
+}
+
+function runAtsSync() {
+  if (getSyncPromise()) return getSyncPromise();
+  const syncPromise = runAtsSyncInternal().finally(() => {
+    setSyncPromise(null);
+  });
+  return setSyncPromise(syncPromise); 
+}
+
+
+async function upsertPostingsBatch(postings, seenEpoch) {
+  const db = getDb()
+  await db.exec("BEGIN TRANSACTION;");
+  try {
+    for (const posting of postings) {
+      const companyName = String(posting.company_name || "").trim();
+      const positionName = String(posting.position_name || "").trim() || "Untitled Position";
+      const jobPostingUrl = String(posting.job_posting_url || "").trim();
+      if (!jobPostingUrl) continue;
+      const postingDateRaw = String(posting.posting_date ?? "").trim();
+      const postingDate = postingDateRaw || null;
+      const jobDescriptionRaw = String(posting.job_description ?? "").trim();
+      const jobDescription = jobDescriptionRaw || null;
+      const normalizedCompensationType = normalizeCompensationType(posting?.compensation_type, "unknown");
+      const compensationType = normalizedCompensationType === "unknown" ? null : normalizedCompensationType;
+      const educationLevels = serializeEducationLevels(posting?.education_levels);
+      const payMinRaw = Number(posting?.pay_min);
+      const payMaxRaw = Number(posting?.pay_max);
+      const payMin = Number.isFinite(payMinRaw) && payMinRaw > 0 ? payMinRaw : null;
+      const payMax = Number.isFinite(payMaxRaw) && payMaxRaw > 0 ? payMaxRaw : null;
+      const payCurrency = normalizeCompensationCurrencyCode(posting?.pay_currency);
+      const payPeriod = normalizeCompensationPayPeriod(posting?.pay_period);
+      const payRaw = String(posting?.pay_raw || "").trim() || null;
+
+      await db.run(
+        `
+          INSERT INTO Postings (
+            company_name,
+            position_name,
+            job_posting_url,
+            posting_date,
+            job_description,
+            compensation_type,
+            education_levels,
+            pay_min,
+            pay_max,
+            pay_currency,
+            pay_period,
+            pay_raw,
+            first_seen_epoch,
+            hidden,
+            hidden_at_epoch,
+            last_seen_epoch
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+          ON CONFLICT(job_posting_url) DO UPDATE SET
+            company_name = excluded.company_name,
+            position_name = excluded.position_name,
+            posting_date = COALESCE(excluded.posting_date, Postings.posting_date),
+            job_description = COALESCE(excluded.job_description, Postings.job_description),
+            compensation_type = COALESCE(excluded.compensation_type, Postings.compensation_type),
+            education_levels = COALESCE(excluded.education_levels, Postings.education_levels),
+            pay_min = CASE WHEN excluded.job_description IS NULL THEN Postings.pay_min ELSE excluded.pay_min END,
+            pay_max = CASE WHEN excluded.job_description IS NULL THEN Postings.pay_max ELSE excluded.pay_max END,
+            pay_currency = CASE WHEN excluded.job_description IS NULL THEN Postings.pay_currency ELSE excluded.pay_currency END,
+            pay_period = CASE WHEN excluded.job_description IS NULL THEN Postings.pay_period ELSE excluded.pay_period END,
+            pay_raw = CASE WHEN excluded.job_description IS NULL THEN Postings.pay_raw ELSE excluded.pay_raw END,
+            first_seen_epoch = COALESCE(Postings.first_seen_epoch, Postings.last_seen_epoch, excluded.first_seen_epoch),
+            last_seen_epoch = excluded.last_seen_epoch
+          WHERE COALESCE(Postings.hidden, 0) = 0;
+        `,
+        [
+          companyName,
+          positionName,
+          jobPostingUrl,
+          postingDate,
+          jobDescription,
+          compensationType,
+          educationLevels,
+          payMin,
+          payMax,
+          payCurrency,
+          payPeriod,
+          payRaw,
+          seenEpoch,
+          seenEpoch
+        ]
+      );
+    }
+    await db.exec("COMMIT;");
+  } catch (error) {
+    await db.exec("ROLLBACK;");
+    throw error;
+  }
+}
+
+async function upsertPostings(postings, lastSeenEpoch) {
+  if (!Array.isArray(postings) || postings.length === 0) return;
+  const seenEpoch = Number(lastSeenEpoch || nowEpochSeconds());
+  try {
+    await upsertPostingsBatch(postings, seenEpoch);
+  } catch (error) {
+    if (!isRecoverablePostingStorageError(error)) {
+      throw error;
+    }
+    await rebuildPostingsTableStorage();
+    await upsertPostingsBatch(postings, seenEpoch);
+  }
+}
+
+async function pruneExpiredPostings(referenceEpoch = nowEpochSeconds()) {
+  const resolvedReferenceEpoch = Number(referenceEpoch || nowEpochSeconds());
+  const cutoffEpoch = resolvedReferenceEpoch - getPostingFreshnessWindowSeconds();
+  const db = getDb()
+  const result = await db.run(
+    `
+      UPDATE Postings
+      SET
+        hidden = 1,
+        hidden_at_epoch = COALESCE(hidden_at_epoch, ?)
+      WHERE COALESCE(hidden, 0) = 0
+        AND COALESCE(first_seen_epoch, last_seen_epoch, 0) < ?;
+    `,
+    [resolvedReferenceEpoch, cutoffEpoch]
+  );
+  return Number(result?.changes || 0);
+}
+
+async function prunePostingsOutsideDateWindow(referenceEpoch = nowEpochSeconds()) {
+  const db = getDb()
+
+  const rows = await db.all(
+    `
+      SELECT id, posting_date
+      FROM Postings
+      WHERE COALESCE(hidden, 0) = 0
+        AND posting_date IS NOT NULL
+        AND TRIM(posting_date) <> '';
+    `
+  );
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+
+  const idsToHide = [];
+  for (const row of rows) {
+    const postingId = Number(row?.id || 0);
+    if (!Number.isFinite(postingId) || postingId <= 0) continue;
+    if (shouldStorePostingByDate(row?.posting_date, referenceEpoch)) continue;
+    idsToHide.push(postingId);
+  }
+
+  if (idsToHide.length === 0) return 0;
+
+  let totalHidden = 0;
+  await db.exec("BEGIN TRANSACTION;");
+  try {
+    const chunkSize = 800;
+    for (let offset = 0; offset < idsToHide.length; offset += chunkSize) {
+      const chunk = idsToHide.slice(offset, offset + chunkSize);
+      if (chunk.length === 0) continue;
+      const placeholders = chunk.map(() => "?").join(", ");
+      const result = await db.run(
+        `
+          UPDATE Postings
+          SET
+            hidden = 1,
+            hidden_at_epoch = COALESCE(hidden_at_epoch, ?)
+          WHERE COALESCE(hidden, 0) = 0
+            AND id IN (${placeholders});
+        `,
+        [Number(referenceEpoch || nowEpochSeconds()), ...chunk]
+      );
+      totalHidden += Number(result?.changes || 0);
+    }
+
+    await db.exec("COMMIT;");
+  } catch (error) {
+    await db.exec("ROLLBACK;");
+    throw error;
+  }
+
+  return totalHidden;
+}
+
+function isRecoverablePostingStorageError(error) {
+  const message = String(error?.message || error || "");
+  if (!message) return false;
+  return (
+    /SQLITE_CORRUPT/i.test(message) ||
+    /database disk image is malformed/i.test(message) ||
+    /SQLITE_BUSY/i.test(message) ||
+    /database is locked/i.test(message)
+  );
+}
+
+
+async function createCanonicalPostingsTable() {
+  const db = getDb();
+  await db.exec(`
+    CREATE TABLE Postings (
+      id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      company_name TEXT NOT NULL,
+      position_name TEXT NOT NULL,
+      job_posting_url TEXT NOT NULL UNIQUE,
+      posting_date TEXT,
+      job_description TEXT,
+      compensation_type TEXT,
+      education_levels TEXT,
+      pay_min REAL,
+      pay_max REAL,
+      pay_currency TEXT,
+      pay_period TEXT,
+      pay_raw TEXT,
+      first_seen_epoch INTEGER,
+      last_seen_epoch INTEGER,
+      hidden INTEGER NOT NULL DEFAULT 0,
+      hidden_at_epoch INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_postings_company_name
+      ON Postings(company_name);
+
+    CREATE INDEX IF NOT EXISTS idx_postings_position_name
+      ON Postings(position_name);
+
+    CREATE INDEX IF NOT EXISTS idx_postings_last_seen_epoch
+      ON Postings(last_seen_epoch);
+
+    CREATE INDEX IF NOT EXISTS idx_postings_first_seen_epoch
+      ON Postings(first_seen_epoch);
+
+    CREATE INDEX IF NOT EXISTS idx_postings_hidden_first_seen_epoch
+      ON Postings(hidden, first_seen_epoch);
+  `);
+}
+
+async function rebuildPostingsTableStorage() {
+  const db = getDb()
+  await db.exec(`DROP TABLE IF EXISTS Postings;`);
+  await createCanonicalPostingsTable();
+}
+
+
+async function getSyncScopeStats() {
+  const db = getDb()
+
+  const rows = await db.all(
+    `
+      SELECT ATS_name
+      FROM companies
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM blocked_companies b
+        WHERE b.normalized_company_name = LOWER(TRIM(companies.company_name))
+      );
+    `
+  );
+
+  const enabledAts = new Set(normalizeSyncEnabledAts(Array.from(getSyncEnabledAts())));
+  let syncEnabledCompanyCount = 0;
+  for (const row of rows) {
+    const normalizedAts = normalizeAtsFilterValue(row?.ATS_name);
+    if (!ATS_FILTER_OPTIONS.has(normalizedAts)) continue;
+    if (enabledAts.has(normalizedAts)) {
+      syncEnabledCompanyCount += 1;
+    }
+  }
+  if (enabledAts.has("governmentjobs")) {
+    syncEnabledCompanyCount += GOVERNMENTJOBS_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("smartrecruiters")) {
+    syncEnabledCompanyCount += SMARTRECRUITERS_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("policeapp")) {
+    syncEnabledCompanyCount += POLICEAPP_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("usajobs")) {
+    syncEnabledCompanyCount += USAJOBS_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("k12jobspot")) {
+    syncEnabledCompanyCount += K12JOBSPOT_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("schoolspring")) {
+    syncEnabledCompanyCount += SCHOOLSPRING_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("calcareers")) {
+    syncEnabledCompanyCount += CALCAREERS_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("calopps")) {
+    syncEnabledCompanyCount += CALOPPS_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("statejobsny")) {
+    syncEnabledCompanyCount += STATEJOBSNY_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("edjoin")) {
+    syncEnabledCompanyCount += EDJOIN_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("webcruiter")) {
+    syncEnabledCompanyCount += WEBCRUITER_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("academicjobsonline")) {
+    syncEnabledCompanyCount += ACADEMICJOBSONLINE_ESTIMATED_COMPANY_COUNT;
+  }
+
+  return {
+    sync_enabled_company_count: syncEnabledCompanyCount,
+    configured_enabled_ats_count: enabledAts.size,
+    excluded_ats_count: Math.max(0, ATS_FILTER_OPTION_ITEMS.length - enabledAts.size)
+  };
+}
+
+module.exports = { runAtsSync, getSyncScopeStats, pruneExpiredPostings, createCanonicalPostingsTable, syncStatus };
+
+

@@ -18,7 +18,6 @@ import {
   TextInput,
   View
 } from "react-native";
-import * as FileSystem from "expo-file-system/legacy";
 import {
   API_BASE_URL,
   blockCompany,
@@ -61,6 +60,25 @@ const PAGE_TITLES = {
   [PAGE_KEYS.SETTINGS_MCP]: "Settings / MCP Settings"
 };
 const IS_ANDROID = Platform.OS === "android";
+let fileSystemModule;
+function getFileSystemModule() {
+  if (fileSystemModule !== undefined) return fileSystemModule;
+  if (Platform.OS === "windows") {
+    fileSystemModule = null;
+    return fileSystemModule;
+  }
+  try {
+    fileSystemModule = require("expo-file-system/legacy");
+  } catch {
+    try {
+      fileSystemModule = require("expo-file-system");
+    } catch {
+      fileSystemModule = null;
+    }
+  }
+  return fileSystemModule;
+}
+
 const PLATFORM_DISPLAY_NAME = (() => {
   if (Platform.OS !== "web") return Platform.OS;
   const runtimePlatform = String(globalThis?.openpostings?.platform || "")
@@ -187,7 +205,7 @@ const DEFAULT_ATS_FILTER_OPTIONS = [
   { value: "careerplug", label: "CareerPlug" },
   { value: "careerpuck", label: "CareerPuck" },
   { value: "careerspage", label: "CareersPage" },
-  { value: "dayforcehcm", label: "Dayforce" },
+  // { value: "dayforcehcm", label: "Dayforce" },
   { value: "eightfold", label: "Eightfold" },
   { value: "fountain", label: "Fountain" },
   { value: "freshteam", label: "Freshteam" },
@@ -459,6 +477,7 @@ function normalizePostingItem(item, index = 0) {
     position_name: positionName,
     location: sanitizeDisplayText(source.location, ""),
     posting_date: sanitizeDisplayText(source.posting_date, ""),
+    job_description: sanitizeDisplayText(source.job_description, ""),
     ats: sanitizeDisplayText(source.ats, ""),
     applied_by_label: sanitizeDisplayText(source.applied_by_label, ""),
     ignored_by_label: sanitizeDisplayText(source.ignored_by_label, ""),
@@ -969,7 +988,8 @@ function PostingCard({
   savingApplicationIds,
   ignoringPostingIds,
   blockedCompanyNames,
-  blockingCompanyNames
+  blockingCompanyNames,
+  showDescriptions
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const postingUrl = String(item?.job_posting_url || "").trim();
@@ -995,11 +1015,13 @@ function PostingCard({
   const locationLabel = sanitizeDisplayText(item?.location, "Location unavailable");
   const companyLabel = sanitizeDisplayText(item?.company_name, "Unknown company");
   const postingDateLabel = sanitizeDisplayText(item?.posting_date, "Posting date unavailable");
+  const postingDescriptionLabel = sanitizeDisplayText(item?.job_description, "");
   const appliedByLabel = sanitizeDisplayText(item?.applied_by_label, "Application already tracked");
   const postingUrlLabel = sanitizeDisplayText(item?.job_posting_url, "");
+  const shouldRenderDescription = Boolean(showDescriptions) && Boolean(postingDescriptionLabel);
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, menuOpen ? styles.cardMenuOpen : null]}>
       <View style={styles.postingCardTopRow}>
         <Pressable onPress={onOpenPosting} style={styles.postingCardMainPressArea}>
           <Text style={styles.position}>{positionName}</Text>
@@ -1007,6 +1029,9 @@ function PostingCard({
           <Text style={styles.company}>{companyLabel}</Text>
           <Text style={styles.ats}>ATS: {atsLabel}</Text>
           <Text style={styles.posted}>{postingDateLabel}</Text>
+          {shouldRenderDescription ? (
+            <Text style={styles.postingDescription}>{postingDescriptionLabel}</Text>
+          ) : null}
           {isApplied ? (
             <Text style={styles.postingAppliedNotice}>{appliedByLabel}</Text>
           ) : null}
@@ -1024,7 +1049,7 @@ function PostingCard({
           </Pressable>
 
           {menuOpen ? (
-            <View style={styles.postingCardMenu}>
+            <View style={[styles.postingCardMenu, { zIndex: 99999, elevation: 99999 }]}>
               <Pressable
                 onPress={() => {
                   setMenuOpen(false);
@@ -1247,7 +1272,7 @@ export default function App() {
     countries: [],
     states: [],
     counties: [],
-    remote: "all",
+    remote: ["all"],
     hide_no_date: false
   });
   const [postingFilterOptions, setPostingFilterOptions] = useState({
@@ -1260,6 +1285,7 @@ export default function App() {
   });
   const [postingFilterOptionsLoading, setPostingFilterOptionsLoading] = useState(false);
   const [postingsFilterPanelOpen, setPostingsFilterPanelOpen] = useState(false);
+  const [showPostingDescriptions, setShowPostingDescriptions] = useState(true);
   const [postings, setPostings] = useState([]);
   const [applications, setApplications] = useState([]);
   const [applicationsLoading, setApplicationsLoading] = useState(false);
@@ -1928,18 +1954,22 @@ export default function App() {
       const fileContent = JSON.stringify(exportPayload, null, 2);
 
       if (IS_ANDROID) {
-        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        const fileSystem = getFileSystemModule();
+        if (!fileSystem?.StorageAccessFramework) {
+          throw new Error("expo-file-system is unavailable for Android export.");
+        }
+        const permissions = await fileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
         if (!permissions?.granted || !permissions?.directoryUri) {
           setMigrationNotice("Export cancelled before selecting a destination folder.");
           return;
         }
-        const targetUri = await FileSystem.StorageAccessFramework.createFileAsync(
+        const targetUri = await fileSystem.StorageAccessFramework.createFileAsync(
           permissions.directoryUri,
           fileName.replace(/\.json$/i, ""),
           "application/json"
         );
-        await FileSystem.writeAsStringAsync(targetUri, fileContent, {
-          encoding: FileSystem.EncodingType.UTF8
+        await fileSystem.writeAsStringAsync(targetUri, fileContent, {
+          encoding: fileSystem.EncodingType.UTF8
         });
         setMigrationNotice(`Settings exported to ${targetUri}`);
         return;
@@ -1959,13 +1989,19 @@ export default function App() {
         return;
       }
 
-      const fallbackDocumentDirectory = FileSystem.documentDirectory;
+      if (Platform.OS === "windows") {
+        setMigrationNotice("Settings export is unavailable on the Windows MSI build.");
+        return;
+      }
+
+      const fileSystem = getFileSystemModule();
+      const fallbackDocumentDirectory = fileSystem?.documentDirectory;
       if (!fallbackDocumentDirectory) {
         throw new Error("No writable document directory is available for export.");
       }
       const fallbackPath = `${fallbackDocumentDirectory}${fileName}`;
-      await FileSystem.writeAsStringAsync(fallbackPath, fileContent, {
-        encoding: FileSystem.EncodingType.UTF8
+      await fileSystem.writeAsStringAsync(fallbackPath, fileContent, {
+        encoding: fileSystem.EncodingType.UTF8
       });
       setMigrationNotice(`Settings exported to ${fallbackPath}`);
     } catch (e) {
@@ -2294,7 +2330,7 @@ export default function App() {
       countries: [],
       states: [],
       counties: [],
-      remote: "all",
+      remote: ["all"],
       hide_no_date: false
     });
   }, []);
@@ -2550,11 +2586,17 @@ export default function App() {
       </View>
 
       <View style={styles.postingsFiltersHeaderRow}>
-        <Pressable onPress={() => setPostingsFilterPanelOpen((prev) => !prev)} style={styles.postingsFiltersToggleBtn}>
-          <Text style={styles.postingsFiltersToggleText}>
-            {postingsFilterPanelOpen ? "Hide Filters" : "Show Filters"}
-          </Text>
-        </Pressable>
+        <View style={styles.postingsFiltersLeftGroup}>
+          <Pressable onPress={() => setPostingsFilterPanelOpen((prev) => !prev)} style={styles.postingsFiltersToggleBtn}>
+            <Text style={styles.postingsFiltersToggleText}>
+              {postingsFilterPanelOpen ? "Hide Filters" : "Show Filters"}
+            </Text>
+          </Pressable>
+          <View style={styles.postingDescriptionToggleRow}>
+            <Text style={styles.postingDescriptionToggleLabel}>Descriptions</Text>
+            <Switch value={showPostingDescriptions} onValueChange={setShowPostingDescriptions} />
+          </View>
+        </View>
         <Pressable onPress={clearAllPostingFilters} style={styles.postingsFiltersClearBtn}>
           <Text style={styles.postingsFiltersClearText}>Clear</Text>
         </Pressable>
@@ -2658,15 +2700,37 @@ export default function App() {
               <Text style={styles.fieldLabel}>Remote Filter</Text>
               <View style={styles.remoteFilterChipsRow}>
                 {remoteFilterOptions.map((option) => {
-                  const selected = postingsFilters.remote === option.value;
+                  const selected = Array.isArray(postingsFilters.remote)
+                    ? postingsFilters.remote.includes(option.value)
+                    : postingsFilters.remote === option.value;
                   return (
                     <Pressable
                       key={option.value}
                       onPress={() =>
-                        setPostingsFilters((prev) => ({
-                          ...prev,
-                          remote: option.value
-                        }))
+                        setPostingsFilters((prev) => {
+                          const current = Array.isArray(prev.remote)
+                            ? prev.remote
+                            : [String(prev.remote || "all")];
+
+                          if (option.value === "all") {
+                            return {
+                              ...prev,
+                              remote: ["all"]
+                            };
+                          }
+
+                          const next = new Set(current.filter((value) => value && value !== "all"));
+                          if (next.has(option.value)) {
+                            next.delete(option.value);
+                          } else {
+                            next.add(option.value);
+                          }
+
+                          return {
+                            ...prev,
+                            remote: next.size > 0 ? Array.from(next) : ["all"]
+                          };
+                        })
                       }
                       style={[styles.remoteFilterChip, selected ? styles.remoteFilterChipActive : null]}
                     >
@@ -2714,6 +2778,7 @@ export default function App() {
               ignoringPostingIds={ignoringPostingIds}
               blockedCompanyNames={blockedCompanyNames}
               blockingCompanyNames={blockingCompanyNamesSet}
+              showDescriptions={showPostingDescriptions}
             />
           )}
           ListEmptyComponent={<Text style={styles.empty}>No postings found.</Text>}
@@ -3605,6 +3670,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 6
   },
+  postingsFiltersLeftGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  postingDescriptionToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  postingDescriptionToggleLabel: {
+    color: "#334e68",
+    fontSize: 12,
+    fontWeight: "600"
+  },
   postingsFiltersToggleBtn: {
     borderWidth: 1,
     borderColor: "#c6ceda",
@@ -3829,6 +3909,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dbe2ea"
   },
+  cardMenuOpen: {
+    position: "relative",
+    zIndex: 999,
+    elevation: 999,
+    paddingBottom: 132
+  },
   position: {
     fontSize: 16,
     fontWeight: "600",
@@ -3854,6 +3940,18 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 12,
     color: "#486581"
+  },
+  postingDescription: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#334e68",
+    lineHeight: 18,
+    backgroundColor: "#f4f7fb",
+    borderWidth: 1,
+    borderColor: "#dbe3ec",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8
   },
   postingAppliedNotice: {
     marginTop: 6,
