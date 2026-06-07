@@ -235,6 +235,9 @@ const DEFAULT_ATS_FILTER_OPTIONS = [
   { value: "policeapp", label: "PoliceApp" },
   { value: "usajobs", label: "USAJobs" },
   { value: "k12jobspot", label: "K12JobSpot" },
+  { value: "snaphunt", label: "Snaphunt" },
+  { value: "dover", label: "Dover" },
+  { value: "oorwin", label: "Oorwin" },
   { value: "schoolspring", label: "SchoolSpring" },
   { value: "calcareers", label: "CalCareers" },
   { value: "calopps", label: "CalOpps" },
@@ -489,6 +492,62 @@ function normalizePostingItem(item, index = 0) {
 function normalizePostingItems(items) {
   const source = Array.isArray(items) ? items : [];
   return source.map((item, index) => normalizePostingItem(item, index));
+}
+
+function formatPostingCompensationAmount(value, currencyCode = "") {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue <= 0) return "";
+
+  const usesFractionDigits = Math.abs(numericValue % 1) > 0;
+  const fractionDigits = usesFractionDigits ? 2 : 0;
+  const normalizedCurrencyCode = sanitizeDisplayText(currencyCode, "").toUpperCase();
+
+  if (normalizedCurrencyCode) {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: normalizedCurrencyCode,
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits
+      }).format(numericValue);
+    } catch {
+      return `${normalizedCurrencyCode} ${new Intl.NumberFormat(undefined, {
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits
+      }).format(numericValue)}`.trim();
+    }
+  }
+
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
+  }).format(numericValue);
+}
+
+function formatPostingCompensationLabel(item) {
+  const payRaw = sanitizeDisplayText(item?.pay_raw, "");
+  if (payRaw) return payRaw;
+
+  const payMin = Number(item?.pay_min);
+  const payMax = Number(item?.pay_max);
+  const hasMin = Number.isFinite(payMin) && payMin > 0;
+  const hasMax = Number.isFinite(payMax) && payMax > 0;
+  if (!hasMin && !hasMax) return "";
+
+  const payCurrency = sanitizeDisplayText(item?.pay_currency, "");
+  const payPeriod = sanitizeDisplayText(item?.pay_period, "");
+  const suffix = payPeriod ? ` per ${payPeriod}` : "";
+
+  if (hasMin && hasMax) {
+    if (payMin === payMax) {
+      return `Structured pay fallback (exact value): ${formatPostingCompensationAmount(payMin, payCurrency)}${suffix}`;
+    }
+    return `Structured pay fallback (min/max): ${formatPostingCompensationAmount(payMin, payCurrency)} - ${formatPostingCompensationAmount(payMax, payCurrency)}${suffix}`;
+  }
+  if (hasMin) {
+    return `Structured pay fallback (min only): ${formatPostingCompensationAmount(payMin, payCurrency)}${suffix}`;
+  }
+  return `Structured pay fallback (max only): ${formatPostingCompensationAmount(payMax, payCurrency)}${suffix}`;
 }
 
 function normalizeAtsValue(value) {
@@ -1015,6 +1074,7 @@ function PostingCard({
   const locationLabel = sanitizeDisplayText(item?.location, "Location unavailable");
   const companyLabel = sanitizeDisplayText(item?.company_name, "Unknown company");
   const postingDateLabel = sanitizeDisplayText(item?.posting_date, "Posting date unavailable");
+  const postingCompensationLabel = formatPostingCompensationLabel(item);
   const postingDescriptionLabel = sanitizeDisplayText(item?.job_description, "");
   const appliedByLabel = sanitizeDisplayText(item?.applied_by_label, "Application already tracked");
   const postingUrlLabel = sanitizeDisplayText(item?.job_posting_url, "");
@@ -1029,6 +1089,7 @@ function PostingCard({
           <Text style={styles.company}>{companyLabel}</Text>
           <Text style={styles.ats}>ATS: {atsLabel}</Text>
           <Text style={styles.posted}>{postingDateLabel}</Text>
+          {postingCompensationLabel ? <Text style={styles.postingCompensation}>{postingCompensationLabel}</Text> : null}
           {shouldRenderDescription ? (
             <Text style={styles.postingDescription}>{postingDescriptionLabel}</Text>
           ) : null}
@@ -3940,6 +4001,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 12,
     color: "#486581"
+  },
+  postingCompensation: {
+    marginTop: 2,
+    fontSize: 12,
+    color: "#0b6e4f",
+    fontWeight: "600"
   },
   postingDescription: {
     marginTop: 8,

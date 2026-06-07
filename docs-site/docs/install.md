@@ -5,11 +5,13 @@ description: Install OpenPostings using the Windows MSI installer or from source
 ---
 
 ## Android Option: Android APK Installer and Google Store Beta 
-You can download the latest app from the github releases page and run it. 
+You can go to the Google Play Store to download it onto your Android Device.
 
-- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.7/app-release.apk
+- https://play.google.com/store/apps/details?id=com.jatonjustice.openpostings&hl=en_US
 
-If you would like to one of the beta testers to help get this on the google play store, fill out this form: https://docs.google.com/forms/d/e/1FAIpQLSdVGhp667EiEB3Cxxc4KA8GTZzZ1CHtiAql4AOIA076W4RYsg/viewform?usp=dialog Within 24 hours you will receive an email confirming that your google account has been added to the closed beta and it will give you the access url to access the beta directly on your Android device. 
+You can also download the latest app from the github releases page and run it. 
+
+- https://github.com/Masterjx9/OpenPostings/releases/download/v2.0.1/app-release.apk
 
 ## Windows Option: Windows MSI installer (Easiest Setup But Still WIP and may have some bugs)
 
@@ -54,7 +56,7 @@ If backend service worker is installed, the installer writes a startup entry tha
 ## MacOS Direct Install (There will never be a playstore version as Apple's Garden wall requires 100 soul bucks every year just for a free app, this its outside of scope of an opensource application)
 You can download the lastest app from the github releases page and run it. 
 
-- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.8/openpostings-1.0.8-universal.dmg
+- https://github.com/Masterjx9/OpenPostings/releases/download/v2.0.1/openpostings-2.0.1-universal.dmg
 
 ## Source Option: Run from source (Best Stability & Compatibility)
 

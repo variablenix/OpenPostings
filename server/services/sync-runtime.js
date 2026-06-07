@@ -84,6 +84,9 @@ const { collectPostingsForSmartRecruitersDynamic, SMARTRECRUITERS_ESTIMATED_COMP
 const { collectPostingsForPoliceappDynamic, POLICEAPP_ESTIMATED_COMPANY_COUNT } = require("../ats/policeapp/service.js");
 const { collectPostingsForUsajobsDynamic, USAJOBS_ESTIMATED_COMPANY_COUNT } = require("../ats/usajobs/service.js");
 const { collectPostingsForK12jobspotDynamic, K12JOBSPOT_ESTIMATED_COMPANY_COUNT } = require("../ats/k12jobspot/service.js");
+const { collectPostingsForSnaphuntDynamic, SNAPHUNT_ESTIMATED_COMPANY_COUNT } = require("../ats/snaphunt/service.js");
+const { collectPostingsForDoverCompany } = require("../ats/dover/service.js");
+const { collectPostingsForOorwinCompany } = require("../ats/oorwin/service.js");
 const { collectPostingsForSchoolspringDynamic, SCHOOLSPRING_ESTIMATED_COMPANY_COUNT } = require("../ats/schoolspring/service.js");
 const { collectPostingsForEdjoinDynamic, EDJOIN_ESTIMATED_COMPANY_COUNT } = require("../ats/edjoin/service.js");
 const { collectPostingsForWebcruiterDynamic, WEBCRUITER_ESTIMATED_COMPANY_COUNT } = require("../ats/webcruiter/service.js");
@@ -497,6 +500,39 @@ async function collectPostingsForCompany(company, options = {}) {
   if (atsName === "k12jobspot" || atsName === "k12jobspot.com" || atsName === "k12jobspotcom" || atsName === "www.k12jobspot.com" || atsName === "wwwk12jobspotcom" || atsName === "api.k12jobspot.com" || atsName === "apik12jobspotcom") {
     return collectPostingsForK12jobspotDynamic();
   }
+  if (
+    atsName === "snaphunt" ||
+    atsName === "snaphunt.com" ||
+    atsName === "snaphuntcom" ||
+    atsName === "api.snaphunt.com" ||
+    atsName === "apisnaphuntcom"
+  ) {
+    const companyUrl = String(company?.url_string || "").trim().toLowerCase();
+    if (companyUrl.includes("api.snaphunt.com/v2/jobs")) {
+      return collectPostingsForSnaphuntDynamic();
+    }
+    return [];
+  }
+  if (
+    atsName === "dover" ||
+    atsName === "app.dover.com" ||
+    atsName === "appdovercom" ||
+    atsName === "www.app.dover.com" ||
+    atsName === "wwwappdovercom"
+  ) {
+    return collectPostingsForDoverCompany(company);
+  }
+  if (
+    atsName === "oorwin" ||
+    atsName === "oorwin.com" ||
+    atsName === "oorwincom" ||
+    atsName === "api.oorwin.ai" ||
+    atsName === "apioorwinai" ||
+    atsName.endsWith(".oorwin.com") ||
+    atsName.endsWith(".oorwin.ai")
+  ) {
+    return collectPostingsForOorwinCompany(company);
+  }
   if (atsName === "schoolspring" || atsName === "schoolspring.com" || atsName === "schoolspringcom" || atsName === "api.schoolspring.com" || atsName === "apischoolspringcom" || atsName === "www.schoolspring.com" || atsName === "wwwschoolspringcom") {
     return collectPostingsForSchoolspringDynamic();
   }
@@ -714,6 +750,14 @@ async function runAtsSyncInternal() {
         company_name: "K12JobSpot (dynamic)",
         url_string: "https://api.k12jobspot.com/api/Jobs/Search",
         ATS_name: "k12jobspot"
+      });
+    }
+    if (enabledAts.has("snaphunt")) {
+      syncTargets.push({
+        id: null,
+        company_name: "Snaphunt (dynamic)",
+        url_string: "https://api.snaphunt.com/v2/jobs?jobLocationType=onsite%2Chybrid%2Cremote&pageSize=300&isFeatured=false",
+        ATS_name: "snaphunt"
       });
     }
     if (enabledAts.has("schoolspring")) {
@@ -1225,6 +1269,9 @@ async function getSyncScopeStats() {
   }
   if (enabledAts.has("k12jobspot")) {
     syncEnabledCompanyCount += K12JOBSPOT_ESTIMATED_COMPANY_COUNT;
+  }
+  if (enabledAts.has("snaphunt")) {
+    syncEnabledCompanyCount += SNAPHUNT_ESTIMATED_COMPANY_COUNT;
   }
   if (enabledAts.has("schoolspring")) {
     syncEnabledCompanyCount += SCHOOLSPRING_ESTIMATED_COMPANY_COUNT;

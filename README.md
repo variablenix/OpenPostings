@@ -29,7 +29,7 @@
 <br/>
 OpenPostings is an OpenSource ATS job aggregator and application tracking app. **It pulls jobs that were posted in the last 24 hours** or that has no posted date. 
 
-Over **100000+** companies from multiple ATSs all sourced into 1 location!
+Over **110000+** companies from multiple ATSs all sourced into 1 location!
 
 Over **THOUSANDS** fresh jobs on average **DAILY**!
 
@@ -150,11 +150,14 @@ Current sync support includes:
 - `prismhr`
 - `silkroad`
 - `paycor`
+- `snaphunt`
+- `dover`
+- `oorwin`
 
 <br>
 <img src="README-Images/ATS_list.png" alt="Applications" width="70%" />
 
-OVER **100000+** companies in total. All gathered from search engine data like Google and DuckDuckGo and also using subdomain searching techniques and directory searching techniques. 
+OVER **110000+** companies in total. All gathered from search engine data like Google and DuckDuckGo and also using subdomain searching techniques and directory searching techniques. 
 <br>
 <img src="README-Images/company_amount.png" alt="Applications" width="25%" />
 <br>
@@ -163,19 +166,19 @@ It pulls in new job data at random from companies and stores it in the database.
 ## Docs
 - Docs: https://masterjx9.github.io/OpenPostings/docs/intro
 
-## Android Install from Google PlayStore (In Beta Comming Soon...)
+## Android Install from Google PlayStore (Easiest Setup)
 If you are interested in being a beta tester follow the Google Form here:
 
-- https://docs.google.com/forms/d/e/1FAIpQLSdVGhp667EiEB3Cxxc4KA8GTZzZ1CHtiAql4AOIA076W4RYsg/viewform?usp=dialog
+- https://play.google.com/store/apps/details?id=com.jatonjustice.openpostings&hl=en_US
 
-## Android Phone/Device DIRECT Install (Easiest Setup But Still WIP and may have some bugs)
+## Android Phone/Device DIRECT Install
 You can download the latest app from the github releases page and run it. 
 
-- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.8/app-release.apk
+- https://github.com/Masterjx9/OpenPostings/releases/download/v2.0.1/app-release.apk
 
 ## Windows Installer Setup (Windows 10/11) (Easiest Setup But Still WIP and may have some bugs)
 Download the latest installer from the github releases page and run it. It will guide you through installation and setup.
-- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.8/openpostings-1.0.8-x64.msi
+- https://github.com/Masterjx9/OpenPostings/releases/download/v2.0.1/openpostings-2.0.1-x64.msi
 
 Choose the setup type during install:
 - `Typical`: Installs the standard OpenPostings app setup (Includes the backend service worker, recommended for most users).
@@ -188,7 +191,7 @@ Once the installation is complete, you can launch OpenPostings from the start me
 ## MacOS Direct Install (There will never be a playstore version as Apple's Garden wall requires 100 soul bucks every year just for a free app, this its outside of scope of an opensource application)
 You can download the lastest app from the github releases page and run it. 
 
-- https://github.com/Masterjx9/OpenPostings/releases/download/v1.0.8/openpostings-1.0.8-universal.dmg
+- https://github.com/Masterjx9/OpenPostings/releases/download/v2.0.1/openpostings-2.0.1-universal.dmg
 
 ## Source Installation Setup (Best Stability & Compatibility)
 
