@@ -30,6 +30,9 @@ const ATS_FILTER_OPTIONS = new Set([
   "policeapp",
   "usajobs",
   "k12jobspot",
+  "snaphunt",
+  "dover",
+  "oorwin",
   "schoolspring",
   "calcareers",
   "calopps",
@@ -172,6 +175,9 @@ const ATS_FILTER_OPTION_ITEMS = Object.freeze([
   { value: "policeapp", label: "PoliceApp" },
   { value: "usajobs", label: "USAJobs" },
   { value: "k12jobspot", label: "K12JobSpot" },
+  { value: "snaphunt", label: "Snaphunt" },
+  { value: "dover", label: "Dover" },
+  { value: "oorwin", label: "Oorwin" },
   { value: "schoolspring", label: "SchoolSpring" },
   { value: "calcareers", label: "CalCareers" },
   { value: "calopps", label: "CalOpps" },
@@ -390,6 +396,41 @@ function normalizeAtsFilterValue(value) {
   }
   if (normalized === "k12jobspot" || normalized === "k12jobspot.com" || normalized === "k12jobspotcom" || normalized === "www.k12jobspot.com" || normalized === "wwwk12jobspotcom" || normalized === "api.k12jobspot.com" || normalized === "apik12jobspotcom") {
     return "k12jobspot";
+  }
+  if (
+    normalized === "snaphunt" ||
+    normalized === "snaphunt.com" ||
+    normalized === "snaphuntcom" ||
+    normalized === "api.snaphunt.com" ||
+    normalized === "apisnaphuntcom"
+  ) {
+    return "snaphunt";
+  }
+  if (
+    normalized === "dover" ||
+    normalized === "app.dover.com" ||
+    normalized === "appdovercom" ||
+    normalized === "www.app.dover.com" ||
+    normalized === "wwwappdovercom"
+  ) {
+    return "dover";
+  }
+  if (
+    normalized === "oorwin" ||
+    normalized === "oorwin.com" ||
+    normalized === "oorwincom" ||
+    normalized === "api.oorwin.ai" ||
+    normalized === "apioorwinai"
+  ) {
+    return "oorwin";
+  }
+  if (
+    normalized.endsWith(".oorwin.com") ||
+    normalized.endsWith(".oorwin.ai") ||
+    normalized.endsWith("oorwincom") ||
+    normalized.endsWith("oorwinai")
+  ) {
+    return "oorwin";
   }
   if (normalized === "schoolspring" || normalized === "schoolspring.com" || normalized === "schoolspringcom" || normalized === "api.schoolspring.com" || normalized === "apischoolspringcom" || normalized === "www.schoolspring.com" || normalized === "wwwschoolspringcom") {
     return "schoolspring";
@@ -660,6 +701,9 @@ function inferAtsFromJobPostingUrl(value) {
   if (url.includes("policeapp.com/") && /\/\d+\/?$/.test(url)) return "policeapp";
   if (url.includes("usajobs.gov/job/")) return "usajobs";
   if (url.includes("k12jobspot.com/job/detail/")) return "k12jobspot";
+  if (url.includes(".snaphunt.com/job/") || url.includes("api.snaphunt.com/v2/jobs")) return "snaphunt";
+  if (url.includes("app.dover.com/jobs/")) return "dover";
+  if (url.includes(".oorwin.com/careers/index.html#/job/details/")) return "oorwin";
   if (url.includes("schoolspring.com/job.cfm?jid=")) return "schoolspring";
   if (url.includes("edjoin.org/home/jobposting/")) return "edjoin";
   if (url.includes(".webcruiter.no/main/recruit/public/")) return "webcruiter";

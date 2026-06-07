@@ -1,7 +1,7 @@
 const { pruneExpiredPostings } = require("./sync-runtime");
 const { normalizePostingSort } = require("../helpers/normalize-strings");
 const { normalizeAtsFilters, normalizeAtsFilterValue, inferAtsFromJobPostingUrl, inferPostingLocationFromJobUrl  } = require("../helpers/normalize-ats");
-const { normalizeStringArray, normalizeLikeText, normalizeAppliedByType, normalizeAppliedByLabel, normalizeIgnoredByLabel } = require("../helpers/normalize-strings");
+const { normalizeStringArray, normalizeLikeText, normalizeAppliedByType, normalizeAppliedByLabel, normalizeIgnoredByLabel, cleanHtmlText } = require("../helpers/normalize-strings");
 const { normalizeCompensationType, normalizeCompensationPayPeriod, normalizeEducationLevels, parseEducationLevels, normalizeCompensationCurrencyCode, parseCountyFilters, parseCountryFilters, parseRegionFilters, normalizeRemoteFilters, buildIndustryMatchersByKey, rowMatchesIndustryLikeParts, rowMatchesEducationFilter, rowMatchesCompensationFilter, rowMatchesCompensationRangeFilter, rowMatchesLocationFilters, rowMatchesRemoteFilter, buildDefaultCountryFilterOptions, inferLocationGeo, LOCATION_REGION_OPTIONS } = require("../helpers/description-filters");
 const { normalizePayFilterNumber, normalizeBoolean, parseNonNegativeInteger, nowEpochSeconds, parsePostingDateToEpochSeconds } = require("../helpers/normalize-numbers");
 const { inferAshbyLocationFromDescription } = require("../ats/ashby/service.js");
@@ -332,10 +332,15 @@ async function listPostingsWithFilters(options = {}) {
     if (!postingDate) {
       postingDate = buildSyncedFallbackPostingDate(row?.first_seen_epoch, row?.last_seen_epoch);
     }
+    const normalizedJobDescription =
+      ats === "workday"
+        ? (cleanHtmlText(row?.job_description) || null)
+        : (String(row?.job_description || "").trim() || null);
 
     return {
       ...row,
       posting_date: postingDate || null,
+      job_description: normalizedJobDescription,
       _has_real_source_posting_date: hasRealDate,
       compensation_type: normalizeCompensationType(row?.compensation_type, "unknown"),
       education_levels: parseEducationLevels(row?.education_levels),

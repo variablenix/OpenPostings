@@ -3,6 +3,7 @@ const MAX_WORKDAY_PAGES_PER_COMPANY = 25;
 const WORKDAY_RATE_LIMIT_WAIT_MS = 60 * 1000;
 const LOCALE_SEGMENT_REGEX = /^[a-z]{2}(?:-[a-z]{2})?$/i;
 const { getPostingFreshnessWindowSeconds, normalizeBoolean } = require("../../helpers/normalize-numbers.js");
+const { cleanHtmlText } = require("../../helpers/normalize-strings.js");
 const { normalizeCompensationType, normalizeEducationLevels } = require("../../helpers/description-filters.js");
 const { fetchWithAtsRateLimit } = require("../../services/queue.js");
 
@@ -53,7 +54,7 @@ async function collectPostingsForWorkdayCompany(company, options = {}) {
           if (detailResponse.ok) {
             const detailPayload = await detailResponse.json();
             const descriptionValue = String(detailPayload?.jobPostingInfo?.jobDescription || "").trim();
-            jobDescription = descriptionValue || null;
+            jobDescription = cleanHtmlText(descriptionValue) || null;
             const parsedDescriptionFilters = parseWorkdayDescriptionFilters(descriptionValue);
             compensationType = parsedDescriptionFilters.compensation_type;
             educationLevels = parsedDescriptionFilters.education_levels;
