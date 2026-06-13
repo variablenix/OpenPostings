@@ -17,6 +17,12 @@
   - [Requirements](#requirements)
   - [Installation](#installation)
   - [Quick Start (Web)](#quick-start-web)
+- [Docker (Self-Hosted / Reverse Proxy)](#docker-self-hosted--reverse-proxy)
+  - [Option A — GHCR Pre-built Image (Recommended)](#option-a--ghcr-pre-built-image-recommended)
+  - [Option B — Build Locally](#option-b--build-locally)
+  - [Reverse Proxy Setup](#reverse-proxy-setup)
+  - [Keeping Your Data](#keeping-your-data)
+  - [Updating](#updating)
 - [Chrome Extension](#chrome-extension-for-capturingadding-more-companies-to-your-app)
   - [Load as Unpacked Extension](#load-as-unpacked-extension)
   - [Run Backend + Extension](#run-backend--extension)
@@ -27,7 +33,7 @@
 - [Security Notes](#security-notes)
 
 <br/>
-OpenPostings is an OpenSource ATS job aggregator and application tracking app. **It pulls jobs that were posted in the last 24 hours** or that has no posted date. 
+OpenPostings is an OpenSource ATS job aggregator and application tracking app. **It pulls jobs that were posted in the last 24 hours** or that has no posted date.
 
 Over **110000+** companies from multiple ATSs all sourced into 1 location!
 
@@ -49,7 +55,6 @@ It combines:
 - A local Node/Express API
 - A local SQLite database
 - An MCP apply-agent server for agent-assisted workflows
-
 
 - Pulls jobs from **multiple ATS** providers into one local database.
 - Filters postings by **search text, ATS, industry, region (AMER/EMEA/APAC), country, state, county, and remote mode**.
@@ -157,11 +162,11 @@ Current sync support includes:
 <br>
 <img src="README-Images/ATS_list.png" alt="Applications" width="70%" />
 
-OVER **110000+** companies in total. All gathered from search engine data like Google and DuckDuckGo and also using subdomain searching techniques and directory searching techniques. 
+OVER **110000+** companies in total. All gathered from search engine data like Google and DuckDuckGo and also using subdomain searching techniques and directory searching techniques.
 <br>
 <img src="README-Images/company_amount.png" alt="Applications" width="25%" />
 <br>
-It pulls in new job data at random from companies and stores it in the database. If the posting has lasted longer than 24 hours in the database its no longer used/deleted. 
+It pulls in new job data at random from companies and stores it in the database. If the posting has lasted longer than 24 hours in the database its no longer used/deleted.
 
 ## Docs
 - Docs: https://masterjx9.github.io/OpenPostings/docs/intro
@@ -172,7 +177,7 @@ If you are interested in being a beta tester follow the Google Form here:
 - https://play.google.com/store/apps/details?id=com.jatonjustice.openpostings&hl=en_US
 
 ## Android Phone/Device DIRECT Install
-You can download the latest app from the github releases page and run it. 
+You can download the latest app from the github releases page and run it.
 
 - https://github.com/Masterjx9/OpenPostings/releases/download/v2.0.1/app-release.apk
 
@@ -186,10 +191,10 @@ Choose the setup type during install:
 - `Custom`: Lets you choose exactly which features to install (for example, whether to include the backend service worker and MCP apply agent server).
 <img src="README-Images/windows_setup_type.png" alt="windows install setup types" width="70%" />
 
-Once the installation is complete, you can launch OpenPostings from the start menu. 
+Once the installation is complete, you can launch OpenPostings from the start menu.
 
 ## MacOS Direct Install (There will never be a playstore version as Apple's Garden wall requires 100 soul bucks every year just for a free app, this its outside of scope of an opensource application)
-You can download the lastest app from the github releases page and run it. 
+You can download the lastest app from the github releases page and run it.
 
 - https://github.com/Masterjx9/OpenPostings/releases/download/v2.0.1/openpostings-2.0.1-universal.dmg
 
@@ -234,7 +239,6 @@ Default API base URL behavior:
 - Web/Windows: `http://localhost:8787`
 - Android (on-device backend): `http://127.0.0.1:8787`
 
-
 ### You can run this Windows or Android as well!
 
 ```powershell
@@ -242,13 +246,124 @@ npm run windows (For windows)
 npm run android (For Android)
 ```
 
+## Docker (Self-Hosted / Reverse Proxy)
+
+Run OpenPostings on a server or homelab using Docker. The setup splits into
+two containers — one for the Expo web frontend and one for the Express API —
+both using the same image.
+
+> **Note:** The API URL is baked into the Expo bundle at build time by Metro,
+> not at container startup. Passing `EXPO_PUBLIC_API_BASE_URL` as a Docker env
+> var alone will not work — it must be set before the bundle compiles.
+> For local use the default `http://localhost:8787` works fine. For reverse
+> proxy deployments pass your public API URL at build time (see Option B).
+
+---
+
+### Option A — GHCR Pre-built Image (Recommended)
+
+A pre-built image is available on GitHub Container Registry — no build step
+required. Best for local deployments using the default API URL.
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/variablenix/openpostings:latest
+
+# Create data directory and DB file
+mkdir -p ./data && touch ./data/jobs.db
+
+# Start both containers
+docker compose -f docker-compose.example.yml up -d
+```
+
+Then open `http://localhost:3001` and hit **Sync Postings**.
+
+> The pre-built image uses `http://localhost:8787` as the default API URL.
+> If you are running behind a reverse proxy with a public-facing API URL,
+> use Option B to build a custom image with your URL baked in.
+
+---
+
+### Option B — Build Locally
+
+Use this if you need a custom API URL baked in (reverse proxy, remote server,
+Cloudflare Tunnel, etc.) or if you want to build from source.
+
+**Before you build — two things to know:**
+
+1. **Debian Trixie is required as the base image.** The `sqlite3` native addon
+   requires glibc 2.38+. Standard Node.js images use Debian Bookworm (glibc
+   2.36) and will fail at runtime with `ERR_DLOPEN_FAILED`. The provided
+   `Dockerfile` uses `node:20-trixie-slim` which has glibc 2.38 and just works.
+
+2. **The API URL must be set at build time.** The variable name is
+   `EXPO_PUBLIC_API_BASE_URL` — note the `_BASE` suffix. Using
+   `EXPO_PUBLIC_API_URL` without it will not work.
+
+```bash
+# Local deployment (default API URL)
+bash docker-build.sh
+
+# Behind a reverse proxy (API URL baked in at build time)
+bash docker-build.sh https://your-api.example.com
+
+# Create data directory and DB file
+mkdir -p ./data && touch ./data/jobs.db
+
+# Start both containers
+docker compose -f docker-compose.example.yml up -d
+```
+
+Then open `http://localhost:3001` and hit **Sync Postings**. The first sync
+crawls all ATS sources and takes a while — it runs server-side so you can
+close the browser tab and come back later.
+
+---
+
+### Reverse Proxy Setup
+
+You'll need two upstream entries pointing at the same host:
+
+| Host | Upstream | Purpose |
+|---|---|---|
+| `postings.example.com` | `http://localhost:3001` | Frontend UI |
+| `postings-api.example.com` | `http://localhost:8787` | API |
+
+---
+
+### Keeping Your Data
+
+Job data is stored in `jobs.db` inside the `openpostings-api` container at
+`/app/jobs.db`. The example compose file bind-mounts it to `./data/jobs.db`
+on the host so it survives container restarts. Skip this and you'll need to
+resync from scratch every time you recreate the container.
+
+---
+
+### Updating
+
+**Option A (GHCR image):**
+```bash
+docker compose -f docker-compose.example.yml pull
+docker compose -f docker-compose.example.yml up -d --force-recreate
+```
+
+**Option B (local build):**
+```bash
+git pull
+bash docker-build.sh        # add your API URL if using a reverse proxy
+docker compose -f docker-compose.example.yml up -d --force-recreate
+```
+
+---
+
 ## Chrome Extension (For Capturing/Adding more companies to your app)
 
 This repo includes a Chrome extension at:
 
 - `chrome-extension/openpostings-seeded-url-capture`
 
-It captures the active tab URL and submits it to OpenPostings as a **seeded ATS company source**.  
+It captures the active tab URL and submits it to OpenPostings as a **seeded ATS company source**.
 Dynamic ATS sources are intentionally blocked.
 
 ### Load as Unpacked Extension
@@ -296,91 +411,6 @@ NOTE: Or if you are using the Windows MSI installer version, just have your back
   - The current page is likely not a seeded ATS company board URL.
 - `Dynamic ATS URLs are not supported`:
   - Expected behavior. This extension only inserts seeded ATS company sources.
-
-=======
-## Docker (Self-Hosted / Reverse Proxy)
-
-If you want to run OpenPostings on a server or homelab rather than your local
-machine, Docker is the way to go. The setup splits into two containers — one
-for the Expo web frontend and one for the Express API — both built from the
-same image.
-
-### Before You Build — Two Things to Know
-
-**1. You need Debian Trixie as the base image.**
-
-The `sqlite3` native addon requires glibc 2.38+. The standard Node.js Docker
-images use Debian Bookworm which only ships glibc 2.36, and you'll hit this
-at runtime:
-
-```
-Error: GLIBC_2.38 not found (ERR_DLOPEN_FAILED)
-```
-
-The provided `Dockerfile` uses `node:20-trixie-slim` which has glibc 2.38 and
-just works.
-
-**2. The API URL gets baked in at build time, not runtime.**
-
-Expo's Metro bundler compiles `EXPO_PUBLIC_API_BASE_URL` into the JS bundle
-when the image is built — not when the container starts. Passing it as a
-Docker env var alone won't do anything. It needs to be in `/app/.env` before
-the bundle compiles.
-
-For local use the default `http://localhost:8787` works fine. If you're
-running behind a reverse proxy (Nginx, NPM, Caddy, Cloudflare Tunnel, etc.)
-you need to pass your public API URL at build time:
-
-```bash
-bash docker-build.sh https://your-api.example.com
-```
-
-One more thing — the variable name in `src/api.js` is `EXPO_PUBLIC_API_BASE_URL`.
-Note the `_BASE` suffix. Using `EXPO_PUBLIC_API_URL` without it won't work.
-
-### Quick Start
-
-```bash
-# Local deployment (API and UI on the same machine)
-bash docker-build.sh
-
-# Behind a reverse proxy
-bash docker-build.sh https://your-api.example.com
-
-# Create the data directory and DB file before starting
-mkdir -p ./data && touch ./data/jobs.db
-
-# Start both containers
-docker compose -f docker-compose.example.yml up -d
-```
-
-Then open `http://localhost:3001` and hit **Sync Postings**. The first sync
-crawls all ATS sources and takes a while — it runs server-side so you can
-close the browser tab and come back later.
-
-### Reverse Proxy Setup
-
-You'll need two upstream entries pointing at the same host:
-
-| Host | Upstream | Purpose |
-|---|---|---|
-| `postings.example.com` | `http://localhost:3001` | Frontend UI |
-| `postings-api.example.com` | `http://localhost:8787` | API |
-
-### Keeping Your Data
-
-Job data is stored in `jobs.db` inside the `openpostings-api` container at
-`/app/jobs.db`. The example compose file bind-mounts it to `./data/jobs.db`
-on the host so it survives container restarts. Skip this and you'll need to
-resync from scratch every time you recreate the container.
-
-### Updating
-
-```bash
-git pull
-bash docker-build.sh        # add your API URL if using a reverse proxy
-docker compose -f docker-compose.example.yml up -d --force-recreate
-```
 
 ## REST API (Summary)
 
@@ -445,7 +475,6 @@ MCP server setup for your Codex (If you use a different LLM, ask it to setup an 
 command = "node"
 args = ['C:\Users\<path to where you cloned the repo>\OpenPostings\server\mcp-apply-server.js']
 ```
-
 
 ## Security Notes
 
