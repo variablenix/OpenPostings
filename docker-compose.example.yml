@@ -1,13 +1,28 @@
 services:
   openpostings-ui:
-    image: local/open-postings:latest
-    container_name: open-postings
+    # Option A: GHCR pre-built image — API URL defaults to http://localhost:8787
+    # Best for local deployments where both containers run on the same host.
+    image: ghcr.io/variablenix/openpostings:latest
+    # Option B: Local build with custom API URL baked in (reverse proxy / remote server)
+    # Build first: bash scripts/docker/docker-build.sh https://your-api.example.com
+    # image: local/open-postings:latest
+    container_name: openpostings-ui
     restart: unless-stopped
     ports:
       - "3001:8081"
     command: ["npx", "expo", "start", "--web", "--port", "8081", "--non-interactive"]
     environment:
+      - TZ=America/New_York                          # set your timezone
       - PORT=8081
+      # Generate with: openssl rand -base64 32
+      - NEXTAUTH_SECRET=your-secret-here
+      # Local deployment — use http://localhost:3001 if not behind a reverse proxy
+      - NEXTAUTH_URL=https://postings.example.com
+      - DATABASE_URL=file:/app/data/openpostings.db
+      # Must match your API container's public URL (or http://localhost:8787 for local)
+      - BACKEND_URL=https://postings-api.example.com
+      # NOTE: EXPO_PUBLIC_API_BASE_URL is baked in at build time — setting it here has no effect.
+      # Use docker-build.sh to bake in a custom API URL for reverse proxy deployments.
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8081/', (r) => { if (r.statusCode !== 200) process.exit(1); })"]
       interval: 30s
@@ -16,23 +31,34 @@ services:
       start_period: 30s
     volumes:
       - ./data:/app/data
+      - ./resumes:/data/files/resumes
     depends_on:
-      - openpostings-api
+      openpostings-api:
+        condition: service_healthy
 
   openpostings-api:
-    image: local/open-postings:latest
-    container_name: open-postings-api
+    # Same image as above — swap to local/open-postings:latest if using Option B
+    image: ghcr.io/variablenix/openpostings:latest
+    # image: local/open-postings:latest
+    container_name: openpostings-api
     restart: unless-stopped
     ports:
       - "8787:8787"
+    # No port 8081 here — avoids collision with the UI container
     command: ["npm", "run", "server"]
     environment:
+      - TZ=America/New_York       # set your timezone
       - PORT=8787
+      - DATABASE_URL=file:/app/data/openpostings.db
+      - DB_PATH=/app/data/jobs.db
+      # How often to auto-sync in ms — 86400000 = 24 hours
+      - SYNC_INTERVAL_MS=86400000
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8787/health', (r) => { if (r.statusCode !== 200) process.exit(1); })"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
     volumes:
-      - ./data/jobs.db:/app/jobs.db
+      - ./data:/app/data
+      - ./resumes:/app/resumes

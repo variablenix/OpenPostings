@@ -248,15 +248,16 @@ npm run android (For Android)
 
 ## Docker (Self-Hosted / Reverse Proxy)
 
-Run OpenPostings on a server or homelab using Docker. The setup splits into
-two containers — one for the Expo web frontend and one for the Express API —
-both using the same image.
+Run OpenPostings on a server or homelab using Docker. The setup uses two
+containers — one for the Expo web frontend and one for the Express API —
+both from the same image.
 
-> **Note:** The API URL is baked into the Expo bundle at build time by Metro,
-> not at container startup. Passing `EXPO_PUBLIC_API_BASE_URL` as a Docker env
-> var alone will not work — it must be set before the bundle compiles.
-> For local use the default `http://localhost:8787` works fine. For reverse
-> proxy deployments pass your public API URL at build time (see Option B).
+> **Note:** The API URL (`EXPO_PUBLIC_API_BASE_URL`) is baked into the Expo
+> bundle at build time by Metro, not at container startup. Passing it as a
+> Docker env var at runtime has no effect — it must be set before the bundle
+> compiles. For local use the default `http://localhost:8787` works fine. For
+> reverse proxy deployments, pass your public API URL at build time via
+> `docker-build.sh` (see Option B).
 
 ---
 
@@ -269,11 +270,17 @@ required. Best for local deployments using the default API URL.
 # Pull the latest image
 docker pull ghcr.io/variablenix/openpostings:latest
 
-# Create data directory and DB file
-mkdir -p ./data && touch ./data/jobs.db
+# Create data and resume directories
+mkdir -p ./data ./resumes && touch ./data/jobs.db
+
+# Copy and edit the example compose file
+cp docker-compose.example.yml docker-compose.yml
+
+# Generate a secret for NEXTAUTH_SECRET
+openssl rand -base64 32
 
 # Start both containers
-docker compose -f docker-compose.example.yml up -d
+docker compose up -d
 ```
 
 Then open `http://localhost:3001` and hit **Sync Postings**.
@@ -284,39 +291,98 @@ Then open `http://localhost:3001` and hit **Sync Postings**.
 
 ---
 
-### Option B — Build Locally
+### Option B — Build Locally (Reverse Proxy / Remote Server)
 
-Use this if you need a custom API URL baked in (reverse proxy, remote server,
-Cloudflare Tunnel, etc.) or if you want to build from source.
+Use this if you need a custom API URL baked in — reverse proxy, remote server,
+Cloudflare Tunnel, etc.
 
 **Before you build — two things to know:**
 
 1. **Debian Trixie is required as the base image.** The `sqlite3` native addon
    requires glibc 2.38+. Standard Node.js images use Debian Bookworm (glibc
    2.36) and will fail at runtime with `ERR_DLOPEN_FAILED`. The provided
-   `Dockerfile` uses `node:20-trixie-slim` which has glibc 2.38 and just works.
+   `Dockerfile` uses `node:20-trixie-slim` which has glibc 2.38.
 
 2. **The API URL must be set at build time.** The variable name is
    `EXPO_PUBLIC_API_BASE_URL` — note the `_BASE` suffix. Using
    `EXPO_PUBLIC_API_URL` without it will not work.
 
 ```bash
-# Local deployment (default API URL)
-bash docker-build.sh
+# Local deployment (default API URL — http://localhost:8787)
+bash scripts/docker/docker-build.sh
 
 # Behind a reverse proxy (API URL baked in at build time)
-bash docker-build.sh https://your-api.example.com
+bash scripts/docker/docker-build.sh https://your-api.example.com
 
-# Create data directory and DB file
-mkdir -p ./data && touch ./data/jobs.db
+# Create data and resume directories
+mkdir -p ./data ./resumes && touch ./data/jobs.db
+
+# Copy and edit the example compose file
+cp docker-compose.example.yml docker-compose.yml
+# Switch both image: lines to local/open-postings:latest
+
+# Generate a secret for NEXTAUTH_SECRET
+openssl rand -base64 32
 
 # Start both containers
-docker compose -f docker-compose.example.yml up -d
+docker compose up -d
 ```
 
 Then open `http://localhost:3001` and hit **Sync Postings**. The first sync
 crawls all ATS sources and takes a while — it runs server-side so you can
 close the browser tab and come back later.
+
+---
+
+### Environment Variables
+
+| Variable | Service | Description |
+|---|---|---|
+| `TZ` | both | Timezone (e.g. `America/New_York`) |
+| `PORT` | both | Internal port (`8081` for UI, `8787` for API) |
+| `NEXTAUTH_SECRET` | UI | Random secret — generate with `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | UI | Public URL of the UI (e.g. `https://postings.example.com`) |
+| `DATABASE_URL` | UI | SQLite path — use `file:/app/data/openpostings.db` |
+| `BACKEND_URL` | UI | Public URL of the API (e.g. `https://postings-api.example.com`) |
+| `DB_PATH` | API | SQLite path — use `/app/data/jobs.db` |
+| `SYNC_INTERVAL_MS` | API | Auto-sync interval in ms — `86400000` = 24 hours |
+
+---
+
+### Reverse Proxy Setup
+
+You'll need two upstream entries pointing at the same host:
+
+| Host | Upstream | Purpose |
+|---|---|---|
+| `postings.example.com` | `http://localhost:3001` | Frontend UI |
+| `postings-api.example.com` | `http://localhost:8787` | API |
+
+---
+
+### Keeping Your Data
+
+Job data is stored in `jobs.db` inside the API container at `/app/data/jobs.db`.
+The example compose file bind-mounts `./data` on the host so it survives
+container restarts. Skip this and you'll need to resync from scratch every
+time you recreate the container.
+
+---
+
+### Updating
+
+**Option A (GHCR image):**
+```bash
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+**Option B (local build):**
+```bash
+git pull
+bash scripts/docker/docker-build.sh        # add your API URL if using a reverse proxy
+docker compose up -d --force-recreate
+```
 
 ---
 
