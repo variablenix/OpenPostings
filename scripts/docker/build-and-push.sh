@@ -62,7 +62,7 @@ echo "Build successful!"
 
 # 3.5. Push to ghcr.io
 echo "[3.5/5] Pushing to ghcr.io..."
-echo "       If this fails, run: docker login ghcr.io -u ${GITHUB_USER}"
+echo "If this fails, run: docker login ghcr.io -u ${GITHUB_USER}"
 docker push "$GHCR_IMAGE"
 if [ $? -ne 0 ]; then
     echo "ERROR: Push failed. Check ghcr.io auth."
