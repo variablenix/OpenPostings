@@ -2,9 +2,14 @@ services:
   openpostings-ui:
     # Option A: GHCR pre-built image — API URL defaults to http://localhost:8787
     # Best for local deployments where both containers run on the same host.
+    # No build step required.
     image: ghcr.io/variablenix/openpostings:latest
     # Option B: Local build with custom API URL baked in (reverse proxy / remote server)
-    # Build first: bash scripts/docker/docker-build.sh https://your-api.example.com
+    # Run: bash scripts/docker/build-local.sh https://your-api.example.com
+    # To build and push to your own registry (e.g. ghcr.io):
+    #   1. Edit scripts/docker/build-and-push.sh with your username, repo, and API URL
+    #   2. Run: bash scripts/docker/build-and-push.sh
+    #   3. Swap the image line below to your registry image
     # image: local/open-postings:latest
     container_name: openpostings-ui
     restart: unless-stopped
@@ -21,8 +26,8 @@ services:
       - DATABASE_URL=file:/app/data/openpostings.db
       # Must match your API container's public URL (or http://localhost:8787 for local)
       - BACKEND_URL=https://postings-api.example.com
-      # NOTE: EXPO_PUBLIC_API_BASE_URL is baked in at build time — setting it here has no effect.
-      # Use docker-build.sh to bake in a custom API URL for reverse proxy deployments.
+      # NOTE: EXPO_PUBLIC_API_BASE_URL is baked in at build time via build-local.sh or
+      # build-and-push.sh — setting it here as a runtime env var has no effect.
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8081/', (r) => { if (r.statusCode !== 200) process.exit(1); })"]
       interval: 30s
@@ -37,7 +42,7 @@ services:
         condition: service_healthy
 
   openpostings-api:
-    # Same image as above — swap to local/open-postings:latest if using Option B
+    # Same image as above — swap to match whichever option you chose for openpostings-ui
     image: ghcr.io/variablenix/openpostings:latest
     # image: local/open-postings:latest
     container_name: openpostings-api
