@@ -249,12 +249,12 @@ npm run android (For Android)
 ## Docker (Self-Hosted / Reverse Proxy)
 
 Run OpenPostings on a server or homelab using Docker. The setup uses two
-containers — one for the Expo web frontend and one for the Express API —
+containers: one for the Expo web frontend and one for the Express API,
 both from the same image.
 
 > **Note:** The API URL (`EXPO_PUBLIC_API_BASE_URL`) is baked into the Expo
 > bundle at build time by Metro, not at container startup. Passing it as a
-> Docker env var at runtime has no effect — it must be set before the bundle
+> Docker env var at runtime has no effect. It must be set before the bundle
 > compiles. For local use the default `http://localhost:8787` works fine. For
 > reverse proxy deployments, pass your public API URL at build time via
 > `docker-build.sh` (see Option B).
@@ -263,7 +263,7 @@ both from the same image.
 
 ### Option A — GHCR Pre-built Image (Recommended)
 
-A pre-built image is available on GitHub Container Registry — no build step
+A pre-built image is available on GitHub Container Registry, no build step
 required. Best for local deployments using the default API URL.
 
 ```bash
@@ -293,7 +293,7 @@ Then open `http://localhost:3001` and hit **Sync Postings**.
 
 ### Option B — Build Locally (Reverse Proxy / Remote Server)
 
-Use this if you need a custom API URL baked in — reverse proxy, remote server,
+Use this if you need a custom API URL baked in for a reverse proxy, remote server,
 Cloudflare Tunnel, etc.
 
 **Before you build — two things to know:**
@@ -304,7 +304,7 @@ Cloudflare Tunnel, etc.
    `Dockerfile` uses `node:20-trixie-slim` which has glibc 2.38.
 
 2. **The API URL must be set at build time.** The variable name is
-   `EXPO_PUBLIC_API_BASE_URL` — note the `_BASE` suffix. Using
+   `EXPO_PUBLIC_API_BASE_URL`, note the `_BASE` suffix. Using
    `EXPO_PUBLIC_API_URL` without it will not work.
 
 ```bash
@@ -329,7 +329,7 @@ docker compose up -d
 ```
 
 Then open `http://localhost:3001` and hit **Sync Postings**. The first sync
-crawls all ATS sources and takes a while — it runs server-side so you can
+crawls all ATS sources and takes a while. It runs server-side so you can
 close the browser tab and come back later.
 
 ---
